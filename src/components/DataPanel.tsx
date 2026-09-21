@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { checkDiskApi, saveToDisk, listDiskBackups, loadDiskBackup, deleteDiskBackup, DiskBackupInfo, DiskStatus } from '../utils/diskSync';
+import * as yndx from '../utils/yndx';
 import type { AppState } from '../types';
 
 export default function DataPanel() {
@@ -74,19 +75,165 @@ export default function DataPanel() {
     if (next) refreshBackups();
   };
 
+  // ── Yandex Disk (облако, REST API — работает с любого устройства) ──
+  const [token, setToken] = useState(yndx.getToken());
+  const [tokenInput, setTokenInput] = useState('');
+  const [cloudLogin, setCloudLogin] = useState<string | null>(null);
+  const [cloudFiles, setCloudFiles] = useState<yndx.CloudFile[]>([]);
+  const [showCloud, setShowCloud] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    yndx.checkToken()
+      .then(login => setCloudLogin(login))
+      .catch(() => { setCloudLogin(null); });
+  }, [token]);
+
+  const handleConnect = async () => {
+    if (!tokenInput.trim()) return;
+    setCloudBusy(true);
+    try {
+      yndx.setToken(tokenInput);
+      const login = await yndx.checkToken();
+      setToken(yndx.getToken());
+      setCloudLogin(login);
+      setTokenInput('');
+      flash(`✅ Подключено: ${login}`);
+    } catch (e: any) {
+      yndx.setToken(null);
+      setToken(null);
+      flash(`❌ ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+  const handleDisconnect = () => {
+    yndx.setToken(null);
+    setToken(null);
+    setCloudLogin(null);
+    setCloudFiles([]);
+    flash('Отключено от облака');
+  };
+
+  const readLocalState = (): AppState | null => {
+    const raw = localStorage.getItem('goalieZoneStatsV2');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return ((parsed.state && parsed.state.games ? parsed.state : parsed) as AppState) || null;
+  };
+
+  const handleCloudSave = async () => {
+    const data = readLocalState();
+    if (!data) { flash('❌ Нет данных для сохранения'); return; }
+    setCloudBusy(true);
+    try {
+      await yndx.uploadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`, JSON.stringify(data, null, 2));
+      const d = new Date();
+      const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;
+      await yndx.uploadFile(`${yndx.FOLDER}/goalie-cloud-${ts}.json`, JSON.stringify(data, null, 2));
+      flash('✅ Загружено в облако (sync-data.json + копия)');
+      if (showCloud) setCloudFiles(await yndx.listCloudFiles());
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+  const loadFromCloud = async (): Promise<AppState | null> => {
+    const text = await yndx.downloadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`);
+    if (text === null) return null;
+    const data = JSON.parse(text);
+    if (!data || !Array.isArray(data.games)) throw new Error('Файл sync-data.json повреждён');
+    return data as AppState;
+  };
+
+  const handleCloudLoad = async () => {
+    setCloudBusy(true);
+    try {
+      const data = await loadFromCloud();
+      if (!data) { flash('В облаке пока нет данных'); setCloudBusy(false); return; }
+      if (!confirm(`Заменить локальные данные данными из облака (${data.games.length} игр)?`)) { setCloudBusy(false); return; }
+      importData(data);
+      flash(`✅ Загружено из облака: ${data.games.length} игр`);
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+  const handleCloudMerge = async () => {
+    setCloudBusy(true);
+    try {
+      const data = await loadFromCloud();
+      if (!data) { flash('В облаке пока нет данных'); setCloudBusy(false); return; }
+      const result = mergeData(data);
+      flash(`✅ Объединено: +${result.added} игр, +${result.goaliesAdded} вратарей`);
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+  const toggleCloud = async () => {
+    const next = !showCloud;
+    setShowCloud(next);
+    if (next) {
+      setCloudBusy(true);
+      try { setCloudFiles(await yndx.listCloudFiles()); }
+      catch (e: any) { flash(`❌ ${e?.message || e}`); }
+      setCloudBusy(false);
+    }
+  };
+
+  const handleCloudRestore = async (f: yndx.CloudFile) => {
+    if (!confirm(`Восстановить данные из «${f.name}»? Текущие данные будут заменены.`)) return;
+    setCloudBusy(true);
+    try {
+      const text = await yndx.downloadFile(f.path);
+      const data = JSON.parse(text!);
+      importData(data);
+      flash(`✅ Восстановлено: ${f.name}`);
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+  const handleCloudDelete = async (f: yndx.CloudFile) => {
+    if (!confirm(`Удалить «${f.name}» с Яндекс.Диска?`)) return;
+    setCloudBusy(true);
+    try {
+      await yndx.deleteFile(f.path);
+      setCloudFiles(await yndx.listCloudFiles());
+      flash('Удалено');
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setCloudBusy(false);
+  };
+
+
   // ── Автобэкап: debounce 10 сек после любого изменения ────
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (disk?.available === false) return;
     if (!autoDiskSync) return;
     const unsub = useStore.subscribe((s, prev) => {
       if (!s.autoDiskSync) return;
       if (s.games === prev.games && s.goalies === prev.goalies && s.media === prev.media) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(async () => {
-        try {
-          await saveToDisk({ ...useStore.getState() } as AppState, 'goalie-auto');
-        } catch { /* сервер мог перезапуститься — попробуем позже */ }
+        const state = { ...useStore.getState() } as AppState;
+        // Приоритет: облако по API (работает везде), иначе локальный dev-сервер
+        if (yndx.getToken()) {
+          try {
+            await yndx.uploadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`, JSON.stringify(state, null, 2));
+          } catch { /* нет сети — попробуем после следующего изменения */ }
+        } else if (disk?.available) {
+          try {
+            await saveToDisk(state, 'goalie-auto');
+          } catch { /* сервер мог перезапуститься — попробуем позже */ }
+        }
       }, 10_000);
     });
     return () => {
@@ -228,6 +375,99 @@ export default function DataPanel() {
               </div>
             ))}
             {disk.dir && <div className="px-3 py-2 text-[10px] text-mut break-all">Папка: {disk.dir}</div>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Облако Яндекс.Диск (REST API, любое устройство) ── */}
+      <div className="mt-3 pt-3 border-t border-line/60">
+        <div className="flex flex-wrap gap-3 items-center">
+          <span className="font-bold text-sm">🌐 Облако (все устройства)</span>
+          {token && cloudLogin && (
+            <span className="text-xs text-green-600 font-semibold">✓ {cloudLogin}</span>
+          )}
+          {token && !cloudLogin && (
+            <span className="text-xs text-mut">Проверка токена…</span>
+          )}
+          {!token && (
+            <>
+              <input
+                type="password"
+                value={tokenInput}
+                onChange={e => setTokenInput(e.target.value)}
+                placeholder="OAuth-токен Яндекс.Диска"
+                className="flex-1 min-w-[220px] rounded-lg border border-line px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-slate-200"
+              />
+              <button
+                onClick={handleConnect}
+                disabled={cloudBusy || !tokenInput.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-700 transition disabled:opacity-50"
+              >
+                Подключить
+              </button>
+              <span className="text-[10px] text-mut w-full">Токен выдаётся на Полигоне Яндекса: yandex.ru/dev/disk/poligon → «Получить OAuth-токен». Хранится только в этом браузере.</span>
+            </>
+          )}
+          {token && (
+            <>
+              <button
+                onClick={handleCloudSave}
+                disabled={cloudBusy}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+                title={`Записать текущие данные на Яндекс.Диск: ${yndx.FOLDER}/${yndx.SYNC_FILE}`}
+              >
+                ⬆ В облако
+              </button>
+              <button
+                onClick={handleCloudLoad}
+                disabled={cloudBusy}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                ⬇ Из облака (заменить)
+              </button>
+              <button
+                onClick={handleCloudMerge}
+                disabled={cloudBusy}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+                title="Добавить игры из облака к локальным, вратари объединяются по имени"
+              >
+                🔀 Объединить
+              </button>
+              <button
+                onClick={toggleCloud}
+                disabled={cloudBusy}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                🗂 Файлы {cloudFiles.length ? `(${cloudFiles.length})` : ''} {showCloud ? '▴' : '▾'}
+              </button>
+              <button
+                onClick={handleDisconnect}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-red-50 text-red-500 transition"
+              >
+                Отключить
+              </button>
+            </>
+          )}
+        </div>
+
+        {showCloud && token && (
+          <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-line/60 divide-y divide-line/40">
+            {!cloudFiles.length && <div className="p-3 text-xs text-mut">Файлов пока нет — нажмите «⬆ В облако»</div>}
+            {cloudFiles.map(f => (
+              <div key={f.path} className="flex items-center gap-2 px-3 py-2 text-xs">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate" title={f.path}>{f.name}</div>
+                  <div className="text-mut">{new Date(f.modified).toLocaleString('ru-RU')} · {fmtSize(f.size)}</div>
+                </div>
+                <button onClick={() => handleCloudRestore(f)} disabled={cloudBusy}
+                  className="px-2 py-1 rounded-md border border-line hover:bg-slate-50 font-semibold disabled:opacity-50">
+                  Восстановить
+                </button>
+                <button onClick={() => handleCloudDelete(f)} disabled={cloudBusy}
+                  className="px-2 py-1 rounded-md border border-line hover:bg-red-50 text-red-500 disabled:opacity-50" title="Удалить файл с диска">✕</button>
+              </div>
+            ))}
+            <div className="px-3 py-2 text-[10px] text-mut break-all">Папка на Диске: {yndx.FOLDER}</div>
           </div>
         )}
       </div>
