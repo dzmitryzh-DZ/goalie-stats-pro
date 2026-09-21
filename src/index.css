@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f2f4f7;
+  --card: #ffffff;
+  --ink: #16181d;
+  --mut: #6b7280;
+  --line: #d7dbe2;
+  --acc: #1d4ed8;
+  --goal: #dc2626;
+  --save: #2563eb;
+}
+
+body { margin: 0; }
+
+.rink-zone { fill: rgba(0,0,0,0); cursor: pointer; transition: fill 0.15s; }
+.rink-zone:hover { fill: rgba(29,78,216,0.12); }
+.rink-zone.flash { fill: rgba(5,150,105,0.3); }
+
+/* Lock state: zones become non-interactive */
+.rink-locked .rink-zone { pointer-events: none; cursor: not-allowed; }
+.rink-locked .rink-zone:hover { fill: rgba(0,0,0,0); }
+
+.card { @apply bg-white border border-line rounded-xl shadow-sm; }
+.tab-active { background: #111827; color: white; border-color: #111827; }
+.btn-primary { @apply bg-acc text-white border-acc hover:bg-blue-800; }
+.btn-danger { @apply text-goal border-line hover:bg-red-50; }
