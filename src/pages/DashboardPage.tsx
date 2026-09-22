@@ -1,13 +1,21 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store';
 import { ZONES, PERIODS, STRENGTHS, STR_GRP_COLORS, STR_GRP_NAMES } from '../types';
-import { pct, svClass, gaa, fmtDate } from '../utils/stats';
+import { pct, gaa, fmtDate } from '../utils/stats';
 
 // Единственный акцент: коралл — интерактив и худшая зона
 const ACCENT = 'rgb(255,130,100)';
 const INK = '#16181d';
 
-const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '#dc2626');
+// 7 ступеней: красный → оранжевый → янтарь → жёлтый → зелёный (всё яркое, без серого)
+const svColor = (v: number) =>
+  v >= 95 ? '#15803d' : // green-700
+  v >= 92 ? '#16a34a' : // green-600
+  v >= 89 ? '#a16207' : // yellow-700
+  v >= 86 ? '#d97706' : // amber-600
+  v >= 83 ? '#ea580c' : // orange-600
+  v >= 80 ? '#c2410c' : // orange-700
+  '#dc2626';           // red-600
 
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
@@ -259,7 +267,7 @@ export default function DashboardPage() {
                     </div>
                     {svVal !== null && (
                       <div className="text-right shrink-0">
-                        <div className={`text-4xl font-black tabular-nums leading-none ${svClass(p.s - p.g, p.s)}`}>{svVal.toFixed(1)}</div>
+                        <div className="text-4xl font-black tabular-nums leading-none" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{svVal.toFixed(1)}</div>
                         <div className={MICRO + ' mt-1'}>SV% · {p.s - p.g}/{p.s}</div>
                       </div>
                     )}
@@ -310,17 +318,17 @@ export default function DashboardPage() {
                       </td>
                       {row.zones.map(z => {
                         const sv = z.s > 0 ? 100 * (z.s - z.g) / z.s : null;
-                        const a = row.maxS > 0 ? 0.06 + 0.8 * (z.s / row.maxS) : 0;
-                        const dark = a > 0.42;
+                        const col = sv !== null ? svColor(sv) : INK;
+                        const a = row.maxS > 0 ? 0.08 + 0.22 * (z.s / row.maxS) : 0;
                         const isWorst = row.worst === z.id;
                         return (
                           <td key={z.id} className="p-1 text-center tabular-nums">
                             <span
                               className="inline-flex items-center justify-center w-14 h-7 rounded-md text-xs font-bold"
                               style={{
-                                background: z.s > 0 ? `rgba(22,24,29,${a.toFixed(2)})` : 'transparent',
-                                color: z.s > 0 ? (dark ? '#fff' : INK) : 'var(--mut)',
-                                boxShadow: isWorst ? `inset 0 0 0 2px ${ACCENT}` : 'none',
+                                background: z.s > 0 ? `${col}${Math.round(a * 255).toString(16).padStart(2, '0')}` : 'transparent',
+                                color: z.s > 0 ? col : 'var(--mut)',
+                                boxShadow: isWorst ? `inset 0 0 0 2px ${ACCENT}` : (z.s > 0 ? `inset 0 0 0 1px ${col}55` : 'none'),
                               }}
                               title={z.s > 0 ? `${z.s} shots / ${z.g} GA — SV ${sv!.toFixed(1)}%` : 'No shots'}
                             >

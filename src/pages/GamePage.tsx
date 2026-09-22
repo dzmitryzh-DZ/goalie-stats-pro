@@ -2,12 +2,20 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore, useActiveGame } from '../store';
 import { ZONES, PERIODS, STRENGTHS, TARGETS, PLAYS, ZONE_PATHS, LABEL_POS, STR_GRP_COLORS } from '../types';
 import type { Event } from '../types';
-import { aggEvents, totals, selTotals, pct, svClass, zoneName, normalizeTime, gaa, fmtDate } from '../utils/stats';
+import { aggEvents, totals, selTotals, pct, zoneName, normalizeTime, gaa, fmtDate } from '../utils/stats';
 
 // Единый с дашбордом язык: коралл — акцент, микро-лейблы, тепло и каскады
 const ACCENT = 'rgb(255,130,100)';
 const INK = '#16181d';
-const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '#dc2626');
+// 7 ступеней: красный → оранжевый → янтарь → жёлтый → зелёный (всё яркое, без серого)
+const svColor = (v: number) =>
+  v >= 95 ? '#15803d' : // green-700
+  v >= 92 ? '#16a34a' : // green-600
+  v >= 89 ? '#a16207' : // yellow-700
+  v >= 86 ? '#d97706' : // amber-600
+  v >= 83 ? '#ea580c' : // orange-600
+  v >= 80 ? '#c2410c' : // orange-700
+  '#dc2626';           // red-600
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 // ── SVG sparkline с фиксированной осью периодов (точки только там, где были броски) ──
@@ -411,8 +419,8 @@ export default function GamePage() {
                 return ZONES.map((z, ri) => {
                   const c = m[z.id] || { s: 0, g: 0 };
                   const sv = c.s > 0 ? 100 * (c.s - c.g) / c.s : null;
-                  const a = c.s > 0 ? 0.06 + 0.8 * (c.s / maxS) : 0;
-                  const dark = a > 0.42;
+                  const col = sv !== null ? svColor(sv) : INK;
+                  const a = c.s > 0 ? 0.08 + 0.22 * (c.s / maxS) : 0;
                   const isWorst = worstZone === z.id;
                   return (
                     <tr key={z.id} className={`border-b border-line/50 fade-row ${z.tier === 'tot' ? 'text-mut' : ''}`} style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
@@ -434,7 +442,7 @@ export default function GamePage() {
                         {sv !== null
                           ? <span
                               className="inline-flex items-center justify-center min-w-[3.5rem] h-7 px-2 rounded-md text-xs font-bold"
-                              style={{ background: `rgba(22,24,29,${a.toFixed(2)})`, color: dark ? '#fff' : INK }}
+                              style={{ background: `${col}${Math.round(a * 255).toString(16).padStart(2, '0')}`, color: col, boxShadow: `inset 0 0 0 1px ${col}55` }}
                               title={`${c.s} shots / ${c.g} GA`}
                             >{sv.toFixed(1)}</span>
                           : <span className="text-mut">—</span>}
@@ -448,7 +456,7 @@ export default function GamePage() {
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s}</td>
                 <td className="py-2 px-2 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g || '—'}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s - tt.g}</td>
-                <td className={`py-2 px-2 text-right tabular-nums ${svClass(tt.s - tt.g, tt.s)}`}>{pct(tt.s - tt.g, tt.s)}</td>
+                <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{pct(tt.s - tt.g, tt.s)}</td>
               </tr>
             </tbody>
           </table>
