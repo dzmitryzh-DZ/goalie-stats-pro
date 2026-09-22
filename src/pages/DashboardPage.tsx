@@ -11,6 +11,44 @@ const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '
 
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
+// ── SVG sparkline с фиксированной осью периодов (как на вкладке Game) ──
+function PeriodSpark({ pts }: { pts: { period: string; sv: number; s: number; g: number }[] }) {
+  const W = 560, H = 52, PAD = 8;
+  const n = PERIODS.length;
+  const pos = (idx: number) => PAD + idx * (W - 2 * PAD) / (n - 1);
+  if (!pts.length) return <div className="h-14" />;
+  const svNums = pts.map(p => p.sv);
+  const lo = Math.min(...svNums, 70) - 3;
+  const hi = Math.max(...svNums, 100) + 3;
+  const y = (v: number) => H - PAD - (v - lo) / (hi - lo) * (H - 2 * PAD);
+  const idxOf = (p: string) => PERIODS.indexOf(p);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${pos(idxOf(p.period)).toFixed(1)},${y(p.sv).toFixed(1)}`).join(' ');
+  const avg = svNums.reduce((a, v) => a + v, 0) / svNums.length;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-12" preserveAspectRatio="none" aria-hidden="true">
+        {pts.length > 1 && (
+          <>
+            <line x1={PAD} x2={W - PAD} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.6" strokeDasharray="3 3" opacity="0.3" />
+            <path d={d} fill="none" stroke={INK} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+          </>
+        )}
+        {pts.map((p, i) => (
+          <circle key={i} cx={pos(idxOf(p.period))} cy={y(p.sv)} r={pts.length === 1 ? 4 : 3.2} fill={svColor(p.sv)} stroke="#fff" strokeWidth="1">
+            <title>{`Period ${p.period}: ${p.s - p.g}/${p.s} — SV ${p.sv.toFixed(1)}%`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="relative h-4 mt-0.5">
+        {PERIODS.map((p, idx) => (
+          <span key={p} className={`absolute text-[9px] font-semibold ${pts.some(x => x.period === p) ? 'text-ink' : 'text-mut/60'}`}
+            style={{ left: `${(pos(idx) / W * 100).toFixed(2)}%`, transform: 'translateX(-50%)' }}>{p}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const games = useStore(s => s.games);
   const goalies = useStore(s => s.goalies);
@@ -361,6 +399,38 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table></div>
+          </div>
+
+          {/* SV% by period — спарклайны за сезон, фиксированная ось */}
+          <div className="card p-4">
+            <div className="flex items-baseline gap-3 mb-3">
+              <h3 className={MICRO}>SV% by period · season</h3>
+              <span className="text-[10px] text-mut">dot color = save quality · dashed line = average</span>
+            </div>
+            <div className="divide-y divide-line/60">
+              {periodPerf.map((row, ri) => {
+                const pts = row.periods
+                  .filter(p => p.s > 0)
+                  .map(p => ({ period: p.period, s: p.s, g: p.g, sv: 100 * (p.s - p.g) / p.s }));
+                const avg = pts.length ? pts.reduce((a, x) => a + x.sv, 0) / pts.length : null;
+                return (
+                  <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
+                    <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
+                      {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
+                      <span className="font-bold text-sm truncate">{row.name}</span>
+                    </div>
+                    <div className="flex-1 min-w-0"><PeriodSpark pts={pts} /></div>
+                    <div className="text-right shrink-0 w-24">
+                      <div className="text-lg font-black tabular-nums leading-none" style={{ color: avg !== null ? svColor(avg) : undefined }}>
+                        {avg !== null ? avg.toFixed(1) : '—'}
+                      </div>
+                      <div className={MICRO + ' mt-1'}>avg SV%</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!periodPerf.length && <div className="text-sm text-mut py-2">No goalies.</div>}
+            </div>
           </div>
 
           {/* Recent form — полоса игровых квадратов */}
