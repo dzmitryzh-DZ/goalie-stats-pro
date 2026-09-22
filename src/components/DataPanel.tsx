@@ -3,6 +3,8 @@ import { useStore } from '../store';
 import { checkDiskApi, saveToDisk, listDiskBackups, loadDiskBackup, deleteDiskBackup, DiskBackupInfo, DiskStatus } from '../utils/diskSync';
 import * as gist from '../utils/gist';
 import * as yndx from '../utils/yndx';
+import { encryptJSON } from '../utils/crypto';
+import { getSessionPassword } from '../utils/auth';
 import type { AppState } from '../types';
 
 export default function DataPanel() {
@@ -181,7 +183,10 @@ export default function DataPanel() {
           } catch { /* нет сети — попробуем после следующего изменения */ }
         } else if (yndx.getToken()) {
           try {
-            await yndx.uploadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`, JSON.stringify(state, null, 2));
+            // Как и гист: шифруем AES-256-GCM паролем сайта (если пароль сессии есть)
+            const pwd = getSessionPassword();
+            const content = pwd ? await encryptJSON(state, pwd) : JSON.stringify(state, null, 2);
+            await yndx.uploadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`, content);
           } catch { /* нет сети — попробуем после следующего изменения */ }
         } else if (disk?.available) {
           try {

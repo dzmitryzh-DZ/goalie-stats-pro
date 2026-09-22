@@ -1,6 +1,7 @@
 // Клиентская синхронизация с Яндекс.Диском через REST API.
 // Работает прямо из браузера (GitHub Pages, любое устройство) —
 // сервер не нужен. Токен OAuth хранится в localStorage устройства.
+// Файл синхронизации шифруется AES-256-GCM паролем сайта (см. utils/crypto).
 
 const API = 'https://cloud-api.yandex.net/v1/disk';
 const TOKEN_KEY = 'gspro_yndx_token';

@@ -1,7 +1,11 @@
 // Клиент к dev-серверному API /api/disk-backup (см. vite.config.ts).
 // Файлы пишутся в ~/Yandex.Disk.localized/Goalie Stats Backups/ —
 // Яндекс.Диск синхронизирует эту папку в облако.
+// Файл облачной синхронизации (sync-data.json) зашифрован AES-256-GCM —
+// при чтении расшифровываем паролем сайта (см. utils/crypto).
 
+import { decryptJSON } from './crypto';
+import { getSessionPassword } from './auth';
 import type { AppState } from '../types';
 
 export interface DiskBackupInfo {
@@ -53,7 +57,17 @@ export async function loadDiskBackup(fileName: string): Promise<AppState> {
   const r = await fetch(`/api/disk-backup?file=${encodeURIComponent(fileName)}`);
   if (!r.ok) throw new Error('not found');
   const text = await r.text();
-  const parsed = JSON.parse(text);
+  // Файл может быть зашифрован (облачная синхронизация) — расшифровываем паролем сайта.
+  // decryptJSON сам пропускает старые файлы в открытом виде.
+  let parsed: any;
+  try {
+    parsed = await decryptJSON(text, getSessionPassword() ?? '');
+  } catch {
+    // нет пароля сессии или неверный — спросим явно
+    const p = typeof prompt === 'function' ? prompt('Этот бэкап зашифрован. Введите пароль сайта:') : null;
+    if (!p) throw new Error('Бэкап зашифрован — нужен пароль сайта');
+    parsed = await decryptJSON(text, p);
+  }
   const data = parsed.state && parsed.state.games ? parsed.state : parsed;
   if (!data || !Array.isArray(data.games)) throw new Error('invalid file format');
   return data as AppState;
