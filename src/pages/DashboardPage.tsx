@@ -19,39 +19,53 @@ const svColor = (v: number) =>
 
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
-// ── SVG sparkline с фиксированной осью периодов (как на вкладке Game) ──
-function PeriodSpark({ pts }: { pts: { period: string; sv: number; s: number; g: number }[] }) {
-  const W = 560, H = 52, PAD = 8;
+// ── Столбчатая диаграмма SV% по периодам: высота = SV%, цвет = шкала, объём подписью ──
+function PeriodBars({ pts, avg }: { pts: { period: string; sv: number; s: number; g: number }[]; avg: number | null }) {
+  const W = 560, H = 120, PADX = 18, TOP = 20, BOT = 8;
   const n = PERIODS.length;
-  const pos = (idx: number) => PAD + idx * (W - 2 * PAD) / (n - 1);
-  if (!pts.length) return <div className="h-14" />;
-  const svNums = pts.map(p => p.sv);
-  const lo = Math.min(...svNums, 70) - 3;
-  const hi = Math.max(...svNums, 100) + 3;
-  const y = (v: number) => H - PAD - (v - lo) / (hi - lo) * (H - 2 * PAD);
-  const idxOf = (p: string) => PERIODS.indexOf(p);
-  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${pos(idxOf(p.period)).toFixed(1)},${y(p.sv).toFixed(1)}`).join(' ');
-  const avg = svNums.reduce((a, v) => a + v, 0) / svNums.length;
+  const slot = (W - 2 * PADX) / n;
+  const bw = Math.min(56, slot * 0.52);
+  const lo = Math.max(50, Math.min(72, ...(pts.length ? pts.map(p => p.sv - 8) : [70])));
+  const y = (v: number) => TOP + (1 - (v - lo) / (100 - lo)) * (H - TOP - BOT);
+  const base = y(lo);
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-12" preserveAspectRatio="none" aria-hidden="true">
-        {pts.length > 1 && (
-          <>
-            <line x1={PAD} x2={W - PAD} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.6" strokeDasharray="3 3" opacity="0.3" />
-            <path d={d} fill="none" stroke={INK} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-          </>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" aria-hidden="true">
+        {/* базовая линия */}
+        <line x1={PADX - 8} x2={W - PADX + 8} y1={base} y2={base} stroke="#d7dbe2" strokeWidth="1" />
+        {/* сезонный SV% вратаря */}
+        {avg !== null && avg > lo && (
+          <g>
+            <line x1={PADX - 8} x2={W - PADX + 8} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.9" strokeDasharray="4 3" opacity="0.45" />
+            <text x={PADX - 8} y={y(avg) - 3} textAnchor="start" fontSize="9" fontWeight="700" fill={INK} opacity="0.55">season {avg.toFixed(1)}</text>
+          </g>
         )}
-        {pts.map((p, i) => (
-          <circle key={i} cx={pos(idxOf(p.period))} cy={y(p.sv)} r={pts.length === 1 ? 4 : 3.2} fill={svColor(p.sv)} stroke="#fff" strokeWidth="1">
-            <title>{`Period ${p.period}: ${p.s - p.g}/${p.s} — SV ${p.sv.toFixed(1)}%`}</title>
-          </circle>
-        ))}
+        {PERIODS.map((per, idx) => {
+          const pt = pts.find(p => p.period === per);
+          if (!pt) return null;
+          const x = PADX + slot * idx + (slot - bw) / 2;
+          const col = svColor(pt.sv);
+          return (
+            <g key={per}>
+              <rect x={x} y={y(pt.sv)} width={bw} height={Math.max(2, base - y(pt.sv))} rx="3" fill={col} opacity="0.92">
+                <title>{`Period ${per}: ${pt.s - pt.g}/${pt.s} — SV ${pt.sv.toFixed(1)}%`}</title>
+              </rect>
+              <text x={x + bw / 2} y={y(pt.sv) - 4} textAnchor="middle" fontSize="11" fontWeight="800" fill={col}>{pt.sv.toFixed(0)}</text>
+            </g>
+          );
+        })}
       </svg>
-      <div className="relative h-4 mt-0.5">
-        {PERIODS.map((p, idx) => (
-          <span key={p} className={`absolute text-[9px] font-semibold ${pts.some(x => x.period === p) ? 'text-ink' : 'text-mut/60'}`}
-            style={{ left: `${(pos(idx) / W * 100).toFixed(2)}%`, transform: 'translateX(-50%)' }}>{p}</span>
-        ))}
+      {/* подписи: период + объём бросков */}
+      <div className="relative h-8 mt-0.5">
+        {PERIODS.map((per, idx) => {
+          const pt = pts.find(p => p.period === per);
+          return (
+            <span key={per} className="absolute text-center" style={{ left: `${((PADX + slot * (idx + 0.5)) / W * 100).toFixed(2)}%`, transform: 'translateX(-50%)', width: slot }}>
+              <span className={`block text-[9px] font-bold ${pt ? 'text-ink' : 'text-mut/50'}`}>{per}</span>
+              <span className="block text-[8px] tabular-nums text-mut">{pt ? `${pt.s} sh` : '—'}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -409,30 +423,31 @@ export default function DashboardPage() {
             </table></div>
           </div>
 
-          {/* SV% by period — спарклайны за сезон, фиксированная ось */}
+          {/* SV% by period — столбчатая диаграмма за сезон */}
           <div className="card p-4">
             <div className="flex items-baseline gap-3 mb-3">
               <h3 className={MICRO}>SV% by period · season</h3>
-              <span className="text-[10px] text-mut">dot color = save quality · dashed line = average</span>
+              <span className="text-[10px] text-mut">bar = SV% in period · under = shots faced · dashed = season SV%</span>
             </div>
             <div className="divide-y divide-line/60">
               {periodPerf.map((row, ri) => {
                 const pts = row.periods
                   .filter(p => p.s > 0)
                   .map(p => ({ period: p.period, s: p.s, g: p.g, sv: 100 * (p.s - p.g) / p.s }));
-                const avg = pts.length ? pts.reduce((a, x) => a + x.sv, 0) / pts.length : null;
+                const summ = summary.find(s => s.id === row.id);
+                const overallSv = summ && summ.s > 0 ? 100 * (summ.s - summ.g) / summ.s : null;
                 return (
-                  <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
-                    <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
+                  <div key={row.id} className="py-3 flex items-start gap-4 fade-row" style={{ ['--i' as any]: ri }}>
+                    <div className="flex items-center gap-2 w-44 shrink-0 min-w-0 pt-1">
                       {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
                       <span className="font-bold text-sm truncate">{row.name}</span>
                     </div>
-                    <div className="flex-1 min-w-0"><PeriodSpark pts={pts} /></div>
-                    <div className="text-right shrink-0 w-24">
-                      <div className="text-lg font-black tabular-nums leading-none" style={{ color: avg !== null ? svColor(avg) : undefined }}>
-                        {avg !== null ? avg.toFixed(1) : '—'}
+                    <div className="flex-1 min-w-0"><PeriodBars pts={pts} avg={overallSv} /></div>
+                    <div className="text-right shrink-0 w-24 pt-1">
+                      <div className="text-lg font-black tabular-nums leading-none" style={{ color: overallSv !== null ? svColor(overallSv) : undefined }}>
+                        {overallSv !== null ? overallSv.toFixed(1) : '—'}
                       </div>
-                      <div className={MICRO + ' mt-1'}>avg SV%</div>
+                      <div className={MICRO + ' mt-1'}>season SV%</div>
                     </div>
                   </div>
                 );

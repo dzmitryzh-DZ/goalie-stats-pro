@@ -650,7 +650,7 @@ export default function PeriodPage() {
           </div>
           <div className="flex-1" />
           <div className="text-right">
-            <div className="text-2xl font-black tabular-nums">{svVal !== null ? svVal.toFixed(1) + '%' : '—'}</div>
+            <div className="text-2xl font-black tabular-nums" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{svVal !== null ? svVal.toFixed(1) + '%' : '—'}</div>
             <div className="text-[9px] uppercase tracking-widest text-neutral-600">Season SV%</div>
           </div>
         </div>
@@ -662,12 +662,13 @@ export default function PeriodPage() {
             <tbody>
               <tr className="border-y border-neutral-400">
                 {[
-                  ['Games', selectedGames.length], ['Shots', tt.s], ['Saves', tt.s - tt.g], ['GA', tt.g],
-                  ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) + '%' : '—'],
-                  ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : '—'],
-                ].map(([l, v], i) => (
+                  ['Games', selectedGames.length, undefined], ['Shots', tt.s, undefined], ['Saves', tt.s - tt.g, undefined],
+                  ['GA', tt.g, tt.g ? '#dc2626' : undefined],
+                  ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) + '%' : '—', dsvVal !== null ? svColor(dsvVal) : undefined],
+                  ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : '—', undefined],
+                ].map(([l, v, c], i) => (
                   <td key={l as string} className={`py-1.5 ${i ? 'border-l border-neutral-300 pl-3' : ''}`}>
-                    <div className="text-base font-black tabular-nums">{v}</div>
+                    <div className="text-base font-black tabular-nums" style={{ color: (c as string) || undefined }}>{v}</div>
                     <div className="text-[8px] uppercase tracking-widest text-neutral-600">{l}</div>
                   </td>
                 ))}
@@ -690,13 +691,14 @@ export default function PeriodPage() {
             <tbody>
               {ZONES.map(z => {
                 const c = m[z.id] || { s: 0, g: 0 };
+                const sv = c.s > 0 ? 100 * (c.s - c.g) / c.s : null;
                 return (
                   <tr key={z.id} className={`border-b border-neutral-300 ${z.tier === 'tot' ? 'text-neutral-500' : ''}`}>
                     <td className="py-1 pr-2">{z.id}. {z.name}</td>
                     <td className="py-1 text-right tabular-nums">{c.s}</td>
-                    <td className="py-1 text-right tabular-nums font-bold">{c.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: c.g ? '#dc2626' : undefined }}>{c.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums">{c.s - c.g}</td>
-                    <td className="py-1 text-right tabular-nums font-bold">{pct(c.s - c.g, c.s)}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: sv !== null ? svColor(sv) : undefined }}>{pct(c.s - c.g, c.s)}</td>
                     <td className="py-1 text-right tabular-nums">{pct(c.g, c.s)}</td>
                   </tr>
                 );
@@ -704,9 +706,9 @@ export default function PeriodPage() {
               <tr className="border-t-2 border-black font-bold">
                 <td className="py-1">TOTAL</td>
                 <td className="py-1 text-right tabular-nums">{tt.s}</td>
-                <td className="py-1 text-right tabular-nums">{tt.g}</td>
+                <td className="py-1 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g}</td>
                 <td className="py-1 text-right tabular-nums">{tt.s - tt.g}</td>
-                <td className="py-1 text-right tabular-nums">{pct(tt.s - tt.g, tt.s)}</td>
+                <td className="py-1 text-right tabular-nums" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{pct(tt.s - tt.g, tt.s)}</td>
                 <td className="py-1 text-right tabular-nums">{pct(tt.g, tt.s)}</td>
               </tr>
             </tbody>
@@ -726,16 +728,19 @@ export default function PeriodPage() {
                 </tr>
               </thead>
               <tbody>
-                {goalieStats.filter(p => p.s > 0).map(p => (
+                {goalieStats.filter(p => p.s > 0).map(p => {
+                  const gsv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
+                  return (
                   <tr key={p.id} className="border-b border-neutral-300">
                     <td className="py-1 pr-2 font-semibold">{p.name}</td>
                     <td className="py-1 text-right tabular-nums">{p.ng}</td>
                     <td className="py-1 text-right tabular-nums">{p.s}</td>
-                    <td className="py-1 text-right tabular-nums">{p.g || '—'}</td>
-                    <td className="py-1 text-right tabular-nums font-bold">{pct(p.s - p.g, p.s)}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                     <td className="py-1 text-right tabular-nums">{p.gaa}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -750,15 +755,18 @@ export default function PeriodPage() {
                 </tr>
               </thead>
               <tbody>
-                {periodStats.map(p => (
+                {periodStats.map(p => {
+                  const psv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
+                  return (
                   <tr key={p.period} className="border-b border-neutral-300">
                     <td className="py-1 pr-2 font-semibold">{p.period === '—' ? 'not set' : p.period}</td>
                     <td className="py-1 text-right tabular-nums">{p.s}</td>
-                    <td className="py-1 text-right tabular-nums">{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums">{p.s - p.g}</td>
-                    <td className="py-1 text-right tabular-nums font-bold">{pct(p.s - p.g, p.s)}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: psv !== null ? svColor(psv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -787,15 +795,18 @@ export default function PeriodPage() {
                   if (s > topS) { topS = s; topZ = z.id; }
                 });
                 const r = g.result;
-                const res = r ? `${+r.gf || 0}:${+r.ga || 0}${r.dec ? ` ${r.dec}` : ''}` : '—';
+                const gfR = r ? +r.gf || 0 : 0, gaR = r ? +r.ga || 0 : 0;
+                const res = r ? `${gfR}:${gaR}${r.dec ? ` ${r.dec}` : ''}` : '—';
+                const gsv = t.s > 0 ? 100 * (t.s - t.g) / t.s : null;
+                const resCol = !r ? undefined : gfR > gaR ? '#15803d' : gfR < gaR ? '#dc2626' : undefined;
                 return (
                   <tr key={g.id} className="border-b border-neutral-300">
                     <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(g.date)}</td>
                     <td className="py-1 pr-2">{g.opponent || '—'}</td>
-                    <td className="py-1 text-center font-bold tabular-nums">{res}</td>
+                    <td className="py-1 text-center font-bold tabular-nums" style={{ color: resCol }}>{res}</td>
                     <td className="py-1 text-right tabular-nums">{t.s}</td>
-                    <td className="py-1 text-right tabular-nums">{t.g || '—'}</td>
-                    <td className="py-1 text-right tabular-nums font-bold">{pct(t.s - t.g, t.s)}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: t.g ? '#dc2626' : undefined }}>{t.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(t.s - t.g, t.s)}</td>
                     <td className="py-1 text-right text-neutral-600">{topS > 0 ? `Z${topZ}` : '—'} <span className="text-neutral-400">({gaa(t.g, toiG, 1)} GAA)</span></td>
                   </tr>
                 );
