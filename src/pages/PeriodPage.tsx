@@ -77,6 +77,7 @@ export default function PeriodPage() {
   const games = useStore(s => s.games);
   const goalies = useStore(s => s.goalies);
   const setActiveGame = useStore(s => s.setActiveGame);
+  const media = useStore(s => s.media);
   const navigate = useNavigate();
 
   // Date range state
@@ -251,6 +252,18 @@ export default function PeriodPage() {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
   };
 
+  // Печать / PDF: включаем report-mode, печатаем, потом снимаем класс
+  const printReport = () => {
+    document.body.classList.add('report-mode');
+    const cleanup = () => {
+      document.body.classList.remove('report-mode');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    setTimeout(cleanup, 120000); // запасной съём класса, если afterprint не сработал
+  };
+
   const kpis: [string, string | number, string | undefined][] = [
     ['Games', selectedGames.length, undefined],
     ['Shots', tt.s, undefined],
@@ -273,6 +286,7 @@ export default function PeriodPage() {
           <button onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">All</button>
           <button onClick={selectNone} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">None</button>
           <button onClick={exportCsv} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Export CSV</button>
+          <button onClick={printReport} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50 transition">🖨 Report / PDF</button>
         </div>
         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
           {rangeGames.map(g => (
@@ -614,6 +628,203 @@ export default function PeriodPage() {
             </tbody>
           </table>
         </div>
+      </div>
+    {/* ── Печатный отчёт: на экране скрыт, виден только в print ── */}
+      <div className="print-report hidden space-y-5 text-[11px] leading-snug text-black">
+        {/* Шапка */}
+        <div className="flex items-center gap-3 pb-3 border-b-2 border-black">
+          {media.teamLogo && <img src={media.teamLogo} alt="" className="w-10 h-10 object-contain" />}
+          <div>
+            <div className="text-xl font-black tracking-tight">GOALIE STATS PRO — SEASON REPORT</div>
+            <div className="text-[10px] text-neutral-600 mt-0.5">
+              Period: {dateFrom || 'start'} — {dateTo || 'now'} · {selectedGames.length} game(s) · Generated {new Date().toLocaleDateString('ru-RU')}
+            </div>
+          </div>
+          <div className="flex-1" />
+          <div className="text-right">
+            <div className="text-2xl font-black tabular-nums">{svVal !== null ? svVal.toFixed(1) + '%' : '—'}</div>
+            <div className="text-[9px] uppercase tracking-widest text-neutral-600">Season SV%</div>
+          </div>
+        </div>
+
+        {/* Сводка */}
+        <div className="pb-avoid">
+          <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">Summary</div>
+          <table className="w-full border-collapse">
+            <tbody>
+              <tr className="border-y border-neutral-400">
+                {[
+                  ['Games', selectedGames.length], ['Shots', tt.s], ['Saves', tt.s - tt.g], ['GA', tt.g],
+                  ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) + '%' : '—'],
+                  ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : '—'],
+                ].map(([l, v], i) => (
+                  <td key={l as string} className={`py-1.5 ${i ? 'border-l border-neutral-300 pl-3' : ''}`}>
+                    <div className="text-base font-black tabular-nums">{v}</div>
+                    <div className="text-[8px] uppercase tracking-widest text-neutral-600">{l}</div>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Зоны */}
+        <div className="pb-avoid">
+          <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">Shots by zone</div>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-black text-left">
+                {['Zone', 'Shots', 'GA', 'Saves', 'SV%', 'Conv%'].map((h, i) => (
+                  <th key={h} className={`py-1 text-[9px] uppercase tracking-widest text-neutral-600 ${i ? 'text-right' : ''}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ZONES.map(z => {
+                const c = m[z.id] || { s: 0, g: 0 };
+                return (
+                  <tr key={z.id} className={`border-b border-neutral-300 ${z.tier === 'tot' ? 'text-neutral-500' : ''}`}>
+                    <td className="py-1 pr-2">{z.id}. {z.name}</td>
+                    <td className="py-1 text-right tabular-nums">{c.s}</td>
+                    <td className="py-1 text-right tabular-nums font-bold">{c.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums">{c.s - c.g}</td>
+                    <td className="py-1 text-right tabular-nums font-bold">{pct(c.s - c.g, c.s)}</td>
+                    <td className="py-1 text-right tabular-nums">{pct(c.g, c.s)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-black font-bold">
+                <td className="py-1">TOTAL</td>
+                <td className="py-1 text-right tabular-nums">{tt.s}</td>
+                <td className="py-1 text-right tabular-nums">{tt.g}</td>
+                <td className="py-1 text-right tabular-nums">{tt.s - tt.g}</td>
+                <td className="py-1 text-right tabular-nums">{pct(tt.s - tt.g, tt.s)}</td>
+                <td className="py-1 text-right tabular-nums">{pct(tt.g, tt.s)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Вратари и игры — две колонки */}
+        <div className="grid grid-cols-2 gap-5 pb-avoid">
+          <div>
+            <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">By goalie</div>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-black text-left">
+                  {['Goalie', 'G', 'Sh', 'GA', 'SV%', 'GAA'].map((h, i) => (
+                    <th key={h} className={`py-1 text-[9px] uppercase tracking-widest text-neutral-600 ${i ? 'text-right' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {goalieStats.filter(p => p.s > 0).map(p => (
+                  <tr key={p.id} className="border-b border-neutral-300">
+                    <td className="py-1 pr-2 font-semibold">{p.name}</td>
+                    <td className="py-1 text-right tabular-nums">{p.ng}</td>
+                    <td className="py-1 text-right tabular-nums">{p.s}</td>
+                    <td className="py-1 text-right tabular-nums">{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold">{pct(p.s - p.g, p.s)}</td>
+                    <td className="py-1 text-right tabular-nums">{p.gaa}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">By period</div>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-black text-left">
+                  {['Period', 'Shots', 'GA', 'Saves', 'SV%'].map((h, i) => (
+                    <th key={h} className={`py-1 text-[9px] uppercase tracking-widest text-neutral-600 ${i ? 'text-right' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periodStats.map(p => (
+                  <tr key={p.period} className="border-b border-neutral-300">
+                    <td className="py-1 pr-2 font-semibold">{p.period === '—' ? 'not set' : p.period}</td>
+                    <td className="py-1 text-right tabular-nums">{p.s}</td>
+                    <td className="py-1 text-right tabular-nums">{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums">{p.s - p.g}</td>
+                    <td className="py-1 text-right tabular-nums font-bold">{pct(p.s - p.g, p.s)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Игры */}
+        <div className="pb-avoid">
+          <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">Games</div>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-black text-left">
+                {['Date', 'Opponent', 'Res', 'Sh', 'GA', 'SV%', 'Top zone'].map((h, i) => (
+                  <th key={h} className={`py-1 text-[9px] uppercase tracking-widest text-neutral-600 ${i > 2 ? 'text-right' : i === 2 ? 'text-center' : ''}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {selectedGames.map(g => {
+                const gm = aggEvents(g.events);
+                const t = totals(gm);
+                let toiG = 0;
+                Object.values(g.toi || {}).forEach(v => { toiG += (+v || 0); });
+                let topZ: number | null = null, topS = -1;
+                ZONES.filter(z => z.tier === 'sel').forEach(z => {
+                  const s = (gm[z.id] || { s: 0 }).s;
+                  if (s > topS) { topS = s; topZ = z.id; }
+                });
+                const r = g.result;
+                const res = r ? `${+r.gf || 0}:${+r.ga || 0}${r.dec ? ` ${r.dec}` : ''}` : '—';
+                return (
+                  <tr key={g.id} className="border-b border-neutral-300">
+                    <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(g.date)}</td>
+                    <td className="py-1 pr-2">{g.opponent || '—'}</td>
+                    <td className="py-1 text-center font-bold tabular-nums">{res}</td>
+                    <td className="py-1 text-right tabular-nums">{t.s}</td>
+                    <td className="py-1 text-right tabular-nums">{t.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold">{pct(t.s - t.g, t.s)}</td>
+                    <td className="py-1 text-right text-neutral-600">{topS > 0 ? `Z${topZ}` : '—'} <span className="text-neutral-400">({gaa(t.g, toiG, 1)} GAA)</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Разбивка пропущенных */}
+        {goalEvents.length > 0 && (
+          <div className="grid grid-cols-3 gap-5 pb-avoid">
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">GA by strength</div>
+              {['even', 'pk', 'pp', 'ea', 'ps'].filter(grp => strBreakdown.byGrp[grp]).map(grp => (
+                <div key={grp} className="flex justify-between py-0.5 border-b border-neutral-300">
+                  <span>{STR_GRP_NAMES[grp]}</span><span className="font-bold tabular-nums">{strBreakdown.byGrp[grp]}</span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">GA by target</div>
+              {tgtBreakdown.map(t => (
+                <div key={t.name} className="flex justify-between py-0.5 border-b border-neutral-300">
+                  <span>{t.name}</span><span className="font-bold tabular-nums">{t.count}</span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-neutral-600 mb-1.5 font-semibold">GA by play</div>
+              {playBreakdown.map(p => (
+                <div key={p.name} className="flex justify-between py-0.5 border-b border-neutral-300">
+                  <span>{p.name}</span><span className="font-bold tabular-nums">{p.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

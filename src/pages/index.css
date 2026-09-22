@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f2f4f7;
+  --card: #ffffff;
+  --ink: #16181d;
+  --mut: #6b7280;
+  --line: #d7dbe2;
+  --acc: #1d4ed8;
+  --goal: #dc2626;
+  --save: #2563eb;
+}
+
+body { margin: 0; }
+
+.rink-zone { fill: rgba(0,0,0,0); cursor: pointer; transition: fill 0.15s; }
+.rink-zone:hover { fill: rgba(29,78,216,0.12); }
+.rink-zone.flash { fill: rgba(5,150,105,0.3); }
+
+/* Lock state: zones become non-interactive */
+.rink-locked .rink-zone { pointer-events: none; cursor: not-allowed; }
+.rink-locked .rink-zone:hover { fill: rgba(0,0,0,0); }
+
+.card { @apply bg-white border border-line rounded-xl shadow-sm; }
+.tab-active { background: #111827; color: white; border-color: #111827; }
+.btn-primary { @apply bg-acc text-white border-acc hover:bg-blue-800; }
+.btn-danger { @apply text-goal border-line hover:bg-red-50; }
+
+/* Плавное появление строк с каскадной задержкой: style="--i: n" */
+@keyframes dash-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-row { animation: dash-fade-in 0.35s cubic-bezier(.4,0,.2,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+
+/* Каскад фокуса: при наведении на таблицу соседние строки гаснут */
+.focus-cascade tbody:hover tr { opacity: 0.22; }
+.focus-cascade tbody tr:hover { opacity: 1; }
+.focus-cascade tbody tr { transition: opacity 0.15s ease; }
+
+/* ── Печатный отчёт (Season → Report / PDF) ── */
+@page { margin: 12mm; }
+
+@media print {
+  body.report-mode { background: #fff !important; }
+  body.report-mode header,
+  body.report-mode footer,
+  body.report-mode .data-panel-wrap { display: none !important; }
+  body.report-mode .page-wrap > *:not(.page-content) { display: none !important; }
+  body.report-mode .page-content > div > *:not(.print-report) { display: none !important; }
+  body.report-mode .print-report { display: block !important; }
+  body.report-mode .card { box-shadow: none !important; border-color: #bbb !important; border-radius: 6px !important; }
+  .print-report .pb-avoid { break-inside: avoid; page-break-inside: avoid; }
+}
