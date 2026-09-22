@@ -10,6 +10,45 @@ const INK = '#16181d';
 const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '#dc2626');
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
+// ── SVG sparkline с фиксированной осью периодов (точки только там, где были броски) ──
+function PeriodSpark({ pts }: { pts: { period: string; sv: number; s: number; g: number }[] }) {
+  const W = 560, H = 52, PAD = 8;
+  const n = PERIODS.length;
+  const pos = (idx: number) => PAD + idx * (W - 2 * PAD) / (n - 1);
+  const svNums = pts.map(p => p.sv);
+  const lo = Math.min(...svNums, 70) - 3;
+  const hi = Math.max(...svNums, 100) + 3;
+  const y = (v: number) => H - PAD - (v - lo) / (hi - lo) * (H - 2 * PAD);
+  const idxOf = (p: string) => PERIODS.indexOf(p);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${pos(idxOf(p.period)).toFixed(1)},${y(p.sv).toFixed(1)}`).join(' ');
+  const avg = svNums.reduce((a, v) => a + v, 0) / svNums.length;
+  if (!pts.length) return <div className="h-14" />;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-12" preserveAspectRatio="none" aria-hidden="true">
+        {pts.length > 1 && (
+          <>
+            <line x1={PAD} x2={W - PAD} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.6" strokeDasharray="3 3" opacity="0.3" />
+            <path d={d} fill="none" stroke={INK} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+          </>
+        )}
+        {pts.map((p, i) => (
+          <circle key={i} cx={pos(idxOf(p.period))} cy={y(p.sv)} r={pts.length === 1 ? 4 : 3.2} fill={svColor(p.sv)} stroke="#fff" strokeWidth="1">
+            <title>{`Period ${p.period}: ${p.s - p.g}/${p.s} — SV ${p.sv.toFixed(1)}%`}</title>
+          </circle>
+        ))}
+      </svg>
+      {/* подписи периодов — позиции совпадают с точками (фиксированная ось) */}
+      <div className="relative h-4 mt-0.5">
+        {PERIODS.map((p, idx) => (
+          <span key={p} className={`absolute text-[9px] font-semibold ${pts.some(x => x.period === p) ? 'text-ink' : 'text-mut/60'}`}
+            style={{ left: `${(pos(idx) / W * 100).toFixed(2)}%`, transform: 'translateX(-50%)' }}>{p}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Self-contained time input that commits on blur and Enter (Enter triggers blur).
  *  NO unmount-commit: when another row is deleted, all rows below it remount with
  *  shifted keys, and an unmount-commit would replay each old closure's pre-delete
@@ -135,6 +174,21 @@ export default function GamePage() {
     ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) : '—', dsvVal !== null ? svColor(dsvVal) : undefined],
     ['GAA', gaa(tt.g, 0, 1), undefined],
   ];
+
+  // Динамика SV% по периодам внутри матча — по каждому вратарю (с учётом фильтра)
+  const periodRows = (() => {
+    const ids = new Set<string>();
+    filteredEvents.forEach(e => ids.add(e.g));
+    return Array.from(ids).map(gid => {
+      const pts = PERIODS.map(per => {
+        let s = 0, gg = 0;
+        filteredEvents.forEach(e => { if (e.g === gid && (e.p || '') === per) { s++; if (e.t === 'goal') gg++; } });
+        return { period: per, s, g: gg, sv: s > 0 ? 100 * (s - gg) / s : null };
+      }).filter(x => x.sv !== null) as { period: string; sv: number; s: number; g: number }[];
+      const avg = pts.length ? pts.reduce((a, x) => a + x.sv, 0) / pts.length : null;
+      return { gid, name: goalies.find(p => p.id === gid)?.name || '—', photo: goalies.find(p => p.id === gid)?.photo, pts, avg };
+    }).filter(r => r.pts.length > 0);
+  })();
 
   return (
     <div className="space-y-4">
@@ -400,6 +454,33 @@ export default function GamePage() {
           </table>
         </div>
       </div>
+
+      {/* SV% by period — динамика внутри матча */}
+      {periodRows.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-baseline gap-3 mb-3">
+            <h3 className={MICRO}>SV% by period · this game</h3>
+            <span className="text-[10px] text-mut">dot color = save quality · dashed line = average</span>
+          </div>
+          <div className="divide-y divide-line/60">
+            {periodRows.map((row, ri) => (
+              <div key={row.gid} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
+                <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
+                  {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
+                  <span className="font-bold text-sm truncate">{row.name}</span>
+                </div>
+                <div className="flex-1 min-w-0"><PeriodSpark pts={row.pts} /></div>
+                <div className="text-right shrink-0 w-24">
+                  <div className="text-lg font-black tabular-nums leading-none" style={{ color: row.avg !== null ? svColor(row.avg) : undefined }}>
+                    {row.avg !== null ? row.avg.toFixed(1) : '—'}
+                  </div>
+                  <div className={MICRO + ' mt-1'}>avg SV%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Goalies in this game + TOI */}
       <div className="card p-4">
