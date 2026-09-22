@@ -19,57 +19,12 @@ const svColor = (v: number) =>
 
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
-// ── Столбчатая диаграмма SV% по периодам: высота = SV%, цвет = шкала, объём подписью ──
-function PeriodBars({ pts, avg }: { pts: { period: string; sv: number; s: number; g: number }[]; avg: number | null }) {
-  const W = 560, H = 120, PADX = 18, TOP = 20, BOT = 8;
-  const n = PERIODS.length;
-  const slot = (W - 2 * PADX) / n;
-  const bw = Math.min(56, slot * 0.52);
-  const lo = Math.max(50, Math.min(72, ...(pts.length ? pts.map(p => p.sv - 8) : [70])));
-  const y = (v: number) => TOP + (1 - (v - lo) / (100 - lo)) * (H - TOP - BOT);
-  const base = y(lo);
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" aria-hidden="true">
-        {/* базовая линия */}
-        <line x1={PADX - 8} x2={W - PADX + 8} y1={base} y2={base} stroke="#d7dbe2" strokeWidth="1" />
-        {/* сезонный SV% вратаря */}
-        {avg !== null && avg > lo && (
-          <g>
-            <line x1={PADX - 8} x2={W - PADX + 8} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.9" strokeDasharray="4 3" opacity="0.45" />
-            <text x={PADX - 8} y={y(avg) - 3} textAnchor="start" fontSize="9" fontWeight="700" fill={INK} opacity="0.55">season {avg.toFixed(1)}</text>
-          </g>
-        )}
-        {PERIODS.map((per, idx) => {
-          const pt = pts.find(p => p.period === per);
-          if (!pt) return null;
-          const x = PADX + slot * idx + (slot - bw) / 2;
-          const col = svColor(pt.sv);
-          return (
-            <g key={per}>
-              <rect x={x} y={y(pt.sv)} width={bw} height={Math.max(2, base - y(pt.sv))} rx="3" fill={col} opacity="0.92">
-                <title>{`Period ${per}: ${pt.s - pt.g}/${pt.s} — SV ${pt.sv.toFixed(1)}%`}</title>
-              </rect>
-              <text x={x + bw / 2} y={y(pt.sv) - 4} textAnchor="middle" fontSize="11" fontWeight="800" fill={col}>{pt.sv.toFixed(0)}</text>
-            </g>
-          );
-        })}
-      </svg>
-      {/* подписи: период + объём бросков */}
-      <div className="relative h-8 mt-0.5">
-        {PERIODS.map((per, idx) => {
-          const pt = pts.find(p => p.period === per);
-          return (
-            <span key={per} className="absolute text-center" style={{ left: `${((PADX + slot * (idx + 0.5)) / W * 100).toFixed(2)}%`, transform: 'translateX(-50%)', width: slot }}>
-              <span className={`block text-[9px] font-bold ${pt ? 'text-ink' : 'text-mut/50'}`}>{per}</span>
-              <span className="block text-[8px] tabular-nums text-mut">{pt ? `${pt.s} sh` : '—'}</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// Цвет количества голов за период: 0 — зелёный, дальше теплее
+const gaColor = (n: number) =>
+  n === 0 ? '#15803d' :
+  n === 1 ? '#d97706' :
+  n === 2 ? '#ea580c' :
+  '#dc2626';
 
 export default function DashboardPage() {
   const games = useStore(s => s.games);
@@ -433,31 +388,43 @@ export default function DashboardPage() {
             </table></div>
           </div>
 
-          {/* SV% by period — столбчатая диаграмма за сезон */}
+          {/* Goals by period — просто количество голов за период */}
           <div className="card p-4">
             <div className="flex items-baseline gap-3 mb-3">
-              <h3 className={MICRO}>SV% by period · season</h3>
-              <span className="text-[10px] text-mut">bar = SV% in period · under = shots faced · dashed = season SV%</span>
+              <h3 className={MICRO}>Goals by period · season</h3>
+              <span className="text-[10px] text-mut">GA per period · green = none, warmer = more</span>
             </div>
             <div className="divide-y divide-line/60">
               {periodPerf.map((row, ri) => {
-                const pts = row.periods
-                  .filter(p => p.s > 0)
-                  .map(p => ({ period: p.period, s: p.s, g: p.g, sv: 100 * (p.s - p.g) / p.s }));
-                const summ = summary.find(s => s.id === row.id);
-                const overallSv = summ && summ.s > 0 ? 100 * (summ.s - summ.g) / summ.s : null;
+                const totalGa = row.periods.reduce((a, p) => a + p.g, 0);
                 return (
-                  <div key={row.id} className="py-3 flex items-start gap-4 fade-row" style={{ ['--i' as any]: ri }}>
-                    <div className="flex items-center gap-2 w-44 shrink-0 min-w-0 pt-1">
+                  <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
+                    <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
                       {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
                       <span className="font-bold text-sm truncate">{row.name}</span>
                     </div>
-                    <div className="flex-1 min-w-0"><PeriodBars pts={pts} avg={overallSv} /></div>
-                    <div className="text-right shrink-0 w-24 pt-1">
-                      <div className="text-lg font-black tabular-nums leading-none" style={{ color: overallSv !== null ? svColor(overallSv) : undefined }}>
-                        {overallSv !== null ? overallSv.toFixed(1) : '—'}
-                      </div>
-                      <div className={MICRO + ' mt-1'}>season SV%</div>
+                    <div className="flex flex-wrap gap-2">
+                      {PERIODS.map(per => {
+                        const p = row.periods.find(x => x.period === per);
+                        if (!p || p.s === 0) return null;
+                        const col = gaColor(p.g);
+                        return (
+                          <div key={per} className="text-center" title={`Period ${per}: ${p.g} GA · ${p.s} shots`}>
+                            <div
+                              className="w-12 h-11 rounded-lg inline-flex items-center justify-center text-lg font-black tabular-nums"
+                              style={{ color: col, background: `${col}18`, boxShadow: `inset 0 0 0 1px ${col}55` }}
+                            >
+                              {p.g}
+                            </div>
+                            <div className="text-[9px] font-bold text-mut mt-0.5">{per}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <span className="flex-1" />
+                    <div className="text-right shrink-0">
+                      <div className="text-lg font-black tabular-nums leading-none" style={{ color: gaColor(totalGa) }}>{totalGa}</div>
+                      <div className={MICRO + ' mt-1'}>total GA</div>
                     </div>
                   </div>
                 );
