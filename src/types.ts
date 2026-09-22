@@ -22,6 +22,20 @@ export interface GameResult {
   dec?: string;    // REG | OT | SO
 }
 
+// Команда (своя) — логотип и название для сезона
+export interface Team {
+  id: string;
+  name: string;
+  logo?: string | null;
+}
+
+// Сезон — игры привязаны к сезону, сезон — к команде
+export interface Season {
+  id: string;
+  name: string;
+  teamId?: string;
+}
+
 export interface Game {
   id: string;
   date: string;
@@ -31,11 +45,15 @@ export interface Game {
   toi: Record<string, number>; // goalieId -> minutes
   period: string;
   result?: GameResult | null;
+  seasonId?: string; // принадлежность к сезону
 }
 
 export interface AppState {
   goalies: Goalie[];
   games: Game[];
+  teams: Team[];
+  seasons: Season[];
+  activeSeasonId: string | null;
   activeId: string | null;
   lastGoalieId: string | null;
   mirror: boolean;

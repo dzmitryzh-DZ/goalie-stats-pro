@@ -74,16 +74,25 @@ function PeriodBars({ pts, avg }: { pts: { period: string; sv: number; s: number
 export default function DashboardPage() {
   const games = useStore(s => s.games);
   const goalies = useStore(s => s.goalies);
+  const activeSeasonId = useStore(s => s.activeSeasonId);
+  const seasons = useStore(s => s.seasons);
   const [filterGoalie, setFilterGoalie] = React.useState('');
 
   const goalieIds = filterGoalie ? [filterGoalie] : goalies.map(p => p.id);
+
+  // Все метрики — только по играм активного сезона
+  const seasonGames = useMemo(
+    () => (activeSeasonId ? games.filter(g => g.seasonId === activeSeasonId) : games),
+    [games, activeSeasonId]
+  );
+  const activeSeasonName = seasons.find(s => s.id === activeSeasonId)?.name || '';
 
   // Summary per goalie across ALL games
   const summary = useMemo(() => {
     const per: Record<string, { games: Set<string>; s: number; g: number; toi: number; w: number; l: number; t: number }> = {};
     goalieIds.forEach(id => { per[id] = { games: new Set(), s: 0, g: 0, toi: 0, w: 0, l: 0, t: 0 }; });
 
-    games.forEach(g => {
+    seasonGames.forEach(g => {
       g.events.forEach(e => {
         if (!per[e.g]) return;
         per[e.g].games.add(g.id);
@@ -111,11 +120,11 @@ export default function DashboardPage() {
       const ng = r ? r.games.size : 0;
       return { ...p, ...r, ng, gaaVal: gaa(r?.g || 0, r?.toi || 0, ng) };
     });
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
   // Per-game SV% series for sparklines (last 8 games played)
   const spark = useMemo(() => {
-    const sorted = [...games].sort((a, b) => a.date < b.date ? -1 : 1);
+    const sorted = [...seasonGames].sort((a, b) => a.date < b.date ? -1 : 1);
     return goalies.filter(p => goalieIds.includes(p.id)).map(p => {
       const pts: { date: string; sv: number | null; shots: number; goals: number; opp: string }[] = [];
       sorted.forEach(g => {
@@ -125,13 +134,13 @@ export default function DashboardPage() {
       });
       return { id: p.id, name: p.name, pts: pts.slice(-8) };
     });
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
   // Zone grid per goalie (danger zones only) — с тепловой заливкой
   const zoneGrid = useMemo(() => {
     return goalies.filter(p => goalieIds.includes(p.id)).map(p => {
       const zm: Record<number, { s: number; g: number }> = {};
-      games.forEach(g => {
+      seasonGames.forEach(g => {
         g.events.forEach(e => {
           if (e.g !== p.id) return;
           if (!zm[e.z]) zm[e.z] = { s: 0, g: 0 };
@@ -153,13 +162,13 @@ export default function DashboardPage() {
       });
       return { name: p.name, id: p.id, zones, totalS, totalG, maxS, worst };
     });
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
   // Period performance per goalie
   const periodPerf = useMemo(() => {
     return goalies.filter(p => goalieIds.includes(p.id)).map(p => {
       const pm: Record<string, { s: number; g: number }> = {};
-      games.forEach(g => {
+      seasonGames.forEach(g => {
         g.events.forEach(e => {
           if (e.g !== p.id) return;
           const per = e.p || '—';
@@ -170,11 +179,11 @@ export default function DashboardPage() {
       });
       return { name: p.name, id: p.id, photo: p.photo, periods: PERIODS.map(per => ({ period: per, ...(pm[per] || { s: 0, g: 0 }) })) };
     });
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
   // Recent form (last 5 games per goalie)
   const recentForm = useMemo(() => {
-    const sorted = [...games].sort((a, b) => a.date < b.date ? -1 : 1);
+    const sorted = [...seasonGames].sort((a, b) => a.date < b.date ? -1 : 1);
     return goalies.filter(p => goalieIds.includes(p.id)).map(p => {
       const goalieGames = sorted.filter(g => g.events.some(e => e.g === p.id)).slice(-5);
       return {
@@ -186,13 +195,13 @@ export default function DashboardPage() {
         })
       };
     });
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
   // Breakdown per goalie
   const breakdowns = useMemo(() => {
     return goalies.filter(p => goalieIds.includes(p.id)).map(p => {
       const goalEvents: { str?: string; tgt?: string; play?: string[] }[] = [];
-      games.forEach(g => {
+      seasonGames.forEach(g => {
         g.events.forEach(e => {
           if (e.g === p.id && e.t === 'goal') goalEvents.push(e);
         });
@@ -206,9 +215,9 @@ export default function DashboardPage() {
       });
       return { name: p.name, id: p.id, total: goalEvents.length, byGrp };
     }).filter(x => x.total > 0);
-  }, [games, goalies, goalieIds]);
+  }, [seasonGames, goalies, goalieIds]);
 
-  const empty = games.length === 0;
+  const empty = seasonGames.length === 0;
 
   // ── SVG sparkline ──────────────────────────────────────
   const Spark = ({ pts }: { pts: { date: string; sv: number | null; shots: number; goals: number; opp: string }[] }) => {
@@ -239,6 +248,7 @@ export default function DashboardPage() {
       {/* Filter — пилюли, неактивные на 25% прозрачности */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <span className={MICRO}>Goalies Dashboard</span>
+        {activeSeasonName && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-acc/10 text-acc uppercase tracking-wider">🏆 {activeSeasonName}</span>}
         <span className="flex-1" />
         {[{ id: '', name: 'All' }, ...goalies].map(p => (
           <button

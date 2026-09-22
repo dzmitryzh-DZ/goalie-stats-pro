@@ -259,7 +259,7 @@ export default function DataPanel() {
     if (!autoDiskSync) return;
     const unsub = useStore.subscribe((s, prev) => {
       if (!s.autoDiskSync) return;
-      if (s.games === prev.games && s.goalies === prev.goalies && s.media === prev.media) return;
+      if (s.games === prev.games && s.goalies === prev.goalies && s.media === prev.media && s.seasons === prev.seasons && s.teams === prev.teams && s.activeSeasonId === prev.activeSeasonId) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(async () => {
         const state = { ...useStore.getState() } as AppState;

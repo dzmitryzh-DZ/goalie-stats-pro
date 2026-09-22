@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AppState, Game, Goalie, Event } from '../types';
+import type { AppState, Game, Goalie, Event, Team, Season } from '../types';
 
 const uid = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const todayStr = () => {
@@ -8,9 +8,18 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
+// Текущий хоккейный сезон по дате: стартует в июле–августе
+export const currentSeasonName = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  return d.getMonth() >= 6 ? `${y}/${String(y + 1).slice(2)}` : `${y - 1}/${String(y).slice(2)}`;
+};
+
 const mkGoalie = (name: string): Goalie => ({ id: uid(), name });
-const mkGame = (date: string, opp: string, goalieId: string): Game => ({
-  id: uid(), date, opponent: opp, events: [], goalieId, toi: {}, period: '1', result: null,
+const mkTeam = (name: string): Team => ({ id: uid(), name, logo: null });
+const mkSeason = (name: string, teamId?: string): Season => ({ id: uid(), name, teamId });
+const mkGame = (date: string, opp: string, goalieId: string, seasonId?: string): Game => ({
+  id: uid(), date, opponent: opp, events: [], goalieId, toi: {}, period: '1', result: null, seasonId,
 });
 
 interface Store extends AppState {
@@ -40,6 +49,17 @@ interface Store extends AppState {
   setTeamLogo: (logo: string | null) => void;
   setAutoDiskSync: (on: boolean) => void;
 
+  // Seasons & teams
+  addSeason: (name: string, teamId?: string) => string;
+  renameSeason: (id: string, name: string) => void;
+  deleteSeason: (id: string) => boolean;
+  setActiveSeason: (id: string) => void;
+  setSeasonTeam: (id: string, teamId?: string) => void;
+  addTeam: (name: string) => string;
+  renameTeam: (id: string, name: string) => void;
+  deleteTeam: (id: string) => boolean;
+  setTeamLogoById: (id: string, logo: string | null) => void;
+
   importData: (data: AppState) => void;
   mergeData: (data: AppState) => { added: number; goaliesAdded: number };
   reset: () => void;
@@ -48,12 +68,32 @@ interface Store extends AppState {
 const initialState: AppState = {
   goalies: [],
   games: [],
+  teams: [],
+  seasons: [],
+  activeSeasonId: null,
   activeId: null,
   lastGoalieId: null,
   mirror: false,
   locked: true,
   media: {},
   autoDiskSync: false,
+};
+
+// Дефолтная пара «команда + сезон» для пустого/мигрирующего состояния
+const ensureSeasonPair = (s: Pick<AppState, 'teams' | 'seasons' | 'games' | 'activeSeasonId'>, teamName = 'My Team', seasonName?: string) => {
+  let teams = [...(s.teams || [])];
+  let seasons = [...(s.seasons || [])];
+  if (!teams.length) {
+    const t = mkTeam(teamName);
+    t.logo = null;
+    teams = [t];
+  }
+  if (!seasons.length) {
+    seasons = [mkSeason(seasonName || currentSeasonName(), teams[0].id)];
+  }
+  const activeSeasonId = seasons.find(x => x.id === s.activeSeasonId) ? s.activeSeasonId! : seasons[0].id;
+  const games = (s.games || []).map(g => ({ ...g, seasonId: g.seasonId || activeSeasonId }));
+  return { teams, seasons, games, activeSeasonId };
 };
 
 export const useStore = create<Store>()(
@@ -66,7 +106,7 @@ export const useStore = create<Store>()(
       addGame: (date, opp) => {
         const state = get();
         const gid = state.lastGoalieId || state.goalies[0]?.id || '';
-        const g = mkGame(date, opp, gid);
+        const g = mkGame(date, opp, gid, state.activeSeasonId || undefined);
         set({ games: [...state.games, g], activeId: g.id });
       },
 
@@ -75,7 +115,7 @@ export const useStore = create<Store>()(
         const games = state.games.filter(g => g.id !== id);
         if (!games.length) {
           const gid = state.lastGoalieId || state.goalies[0]?.id || '';
-          games.push(mkGame(todayStr(), '', gid));
+          games.push(mkGame(todayStr(), '', gid, state.activeSeasonId || undefined));
         }
         set({ games, activeId: games[0].id });
       },
@@ -192,6 +232,72 @@ export const useStore = create<Store>()(
       setTeamLogo: (logo) => set(state => ({ media: { ...state.media, teamLogo: logo } })),
       setAutoDiskSync: (on) => set({ autoDiskSync: on }),
 
+      // ---- Seasons & teams ----
+
+      addSeason: (name, teamId) => {
+        const s = mkSeason(name.trim() || currentSeasonName(), teamId);
+        set(state => ({ seasons: [...state.seasons, s], activeSeasonId: s.id }));
+        return s.id;
+      },
+
+      renameSeason: (id, name) => {
+        set(state => ({
+          seasons: state.seasons.map(s => s.id === id ? { ...s, name } : s)
+        }));
+      },
+
+      deleteSeason: (id) => {
+        const state = get();
+        if (state.seasons.length <= 1) return false;
+        if (state.games.some(g => g.seasonId === id)) return false; // есть игры — нельзя
+        const seasons = state.seasons.filter(s => s.id !== id);
+        set({
+          seasons,
+          activeSeasonId: state.activeSeasonId === id ? seasons[0].id : state.activeSeasonId,
+        });
+        return true;
+      },
+
+      setActiveSeason: (id) => {
+        const state = get();
+        if (!state.seasons.find(s => s.id === id)) return;
+        // При переключении сезона открываем последнюю игру этого сезона
+        const seasonGames = state.games.filter(g => g.seasonId === id);
+        const activeId = seasonGames.length ? seasonGames[seasonGames.length - 1].id : state.activeId;
+        set({ activeSeasonId: id, activeId });
+      },
+
+      setSeasonTeam: (id, teamId) => {
+        set(state => ({
+          seasons: state.seasons.map(s => s.id === id ? { ...s, teamId } : s)
+        }));
+      },
+
+      addTeam: (name) => {
+        const t = mkTeam(name.trim() || 'Team');
+        set(state => ({ teams: [...state.teams, t] }));
+        return t.id;
+      },
+
+      renameTeam: (id, name) => {
+        set(state => ({
+          teams: state.teams.map(t => t.id === id ? { ...t, name } : t)
+        }));
+      },
+
+      deleteTeam: (id) => {
+        const state = get();
+        if (state.seasons.some(s => s.teamId === id)) return false; // используется сезоном
+        set({ teams: state.teams.filter(t => t.id !== id) });
+        return true;
+      },
+
+      setTeamLogoById: (id, logo) => {
+        set(state => ({
+          teams: state.teams.map(t => t.id === id ? { ...t, logo } : t)
+        }));
+      },
+
       importData: (data) => {
         // Normalize imported data to ensure all required fields exist
         const normalized: AppState = {
@@ -204,6 +310,9 @@ export const useStore = create<Store>()(
             goalieId: g.goalieId || '',
             result: g.result || null,
           })) : [],
+          teams: Array.isArray(data.teams) ? data.teams : [],
+          seasons: Array.isArray(data.seasons) ? data.seasons : [],
+          activeSeasonId: data.activeSeasonId || null,
           activeId: data.activeId || null,
           lastGoalieId: data.lastGoalieId || null,
           mirror: !!data.mirror,
@@ -216,13 +325,20 @@ export const useStore = create<Store>()(
           normalized.goalies = [mkGoalie('Goalie 1')];
           normalized.lastGoalieId = normalized.goalies[0].id;
         }
+        // Ensure season/team pair and assign games without season
+        const pair = ensureSeasonPair(normalized);
+        normalized.teams = pair.teams;
+        normalized.seasons = pair.seasons;
+        normalized.games = pair.games;
+        normalized.activeSeasonId = pair.activeSeasonId;
         // Ensure at least one game
         if (!normalized.games.length) {
-          normalized.games = [mkGame(todayStr(), '', normalized.goalies[0].id)];
+          const g = mkGame(todayStr(), '', normalized.goalies[0].id, normalized.activeSeasonId || undefined);
+          normalized.games = [g];
         }
         // Fix activeId
         if (!normalized.activeId || !normalized.games.find(g => g.id === normalized.activeId)) {
-          normalized.activeId = normalized.games[0].id;
+          normalized.activeId = normalized.games[normalized.games.length - 1].id;
         }
         if (!normalized.lastGoalieId) {
           normalized.lastGoalieId = normalized.goalies[0].id;
@@ -241,20 +357,60 @@ export const useStore = create<Store>()(
           } else {
             const newId = uid();
             goalieMap[gp.id] = newId;
-            // Will be added below
           }
         });
         const newGoalies = (data.goalies || [])
           .filter((gp: Goalie) => !state.goalies.find(p => p.name === gp.name))
           .map((gp: Goalie) => ({ ...gp, id: goalieMap[gp.id] }));
 
-        // Merge games (skip duplicates by date+opponent)
-        const existingKeys = new Set(state.games.map(g => `${g.date}|${(g.opponent||'').toLowerCase()}`));
+        // Merge teams by name
+        const teamMap: Record<string, string> = {};
+        (data.teams || []).forEach((tm: Team) => {
+          const existing = state.teams.find(t => t.name === tm.name);
+          if (existing) {
+            teamMap[tm.id] = existing.id;
+          } else {
+            const newId = uid();
+            teamMap[tm.id] = newId;
+          }
+        });
+        const newTeams = (data.teams || [])
+          .filter((tm: Team) => !state.teams.find(t => t.name === tm.name))
+          .map((tm: Team) => ({ ...tm, id: teamMap[tm.id] }));
+
+        // Merge seasons by name (+ team mapping)
+        const seasonMap: Record<string, string> = {};
+        (data.seasons || []).forEach((sn: Season) => {
+          const mappedTeamId = sn.teamId ? teamMap[sn.teamId] || sn.teamId : undefined;
+          const existing = state.seasons.find(s => s.name === sn.name && (s.teamId || '') === (mappedTeamId || ''));
+          if (existing) {
+            seasonMap[sn.id] = existing.id;
+          } else {
+            const newId = uid();
+            seasonMap[sn.id] = newId;
+          }
+        });
+        const seasonExists = (sn: Season) => {
+          const mappedTeamId = sn.teamId ? teamMap[sn.teamId] || sn.teamId : undefined;
+          return !!state.seasons.find(s => s.name === sn.name && (s.teamId || '') === (mappedTeamId || ''));
+        };
+        const newSeasons = (data.seasons || [])
+          .filter((sn: Season) => !seasonExists(sn))
+          .map((sn: Season) => ({
+            ...sn,
+            id: seasonMap[sn.id],
+            teamId: sn.teamId ? teamMap[sn.teamId] || sn.teamId : undefined,
+          }));
+
+        // Merge games (skip duplicates by date+opponent within same season)
+        const existingKeys = new Set(state.games.map(g => `${g.seasonId || ''}|${g.date}|${(g.opponent||'').toLowerCase()}`));
+        const fallbackSeason = state.activeSeasonId || state.seasons[0]?.id || '';
         const newGames = (data.games || [])
-          .filter((gm: Game) => !existingKeys.has(`${gm.date}|${(gm.opponent||'').toLowerCase()}`))
+          .filter((gm: Game) => !existingKeys.has(`${seasonMap[gm.seasonId || ''] || gm.seasonId || ''}|${gm.date}|${(gm.opponent||'').toLowerCase()}`))
           .map((gm: Game) => ({
             ...gm,
             id: uid(),
+            seasonId: seasonMap[gm.seasonId || ''] || gm.seasonId || fallbackSeason,
             goalieId: goalieMap[gm.goalieId] || state.goalies[0]?.id || '',
             events: (gm.events || []).map(e => ({
               ...e,
@@ -267,6 +423,8 @@ export const useStore = create<Store>()(
 
         set({
           goalies: [...state.goalies, ...newGoalies],
+          teams: [...state.teams, ...newTeams],
+          seasons: [...state.seasons, ...newSeasons],
           games: [...state.games, ...newGames],
           activeId: newGames.length ? newGames[newGames.length - 1].id : state.activeId,
         });
@@ -277,19 +435,33 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'goalieZoneStatsV2',
-      version: 1,
+      version: 2,
       migrate: (persisted: any) => {
-        // Migration from v1 localStorage if needed could go here
-        // For now just ensure structure
+        // v1 -> v2: добавляем teams/seasons, привязываем игры к сезону
+        persisted.teams = Array.isArray(persisted.teams) ? persisted.teams : [];
+        persisted.seasons = Array.isArray(persisted.seasons) ? persisted.seasons : [];
+        persisted.activeSeasonId = persisted.activeSeasonId || null;
         if (!persisted.goalies?.length) {
           persisted.goalies = [mkGoalie('Goalie 1')];
           persisted.lastGoalieId = persisted.goalies[0].id;
         }
         if (!persisted.games?.length) {
-          persisted.games = [mkGame(todayStr(), '', persisted.goalies[0].id)];
+          persisted.games = [mkGame(todayStr(), '', persisted.goalies[0].id, persisted.activeSeasonId || undefined)];
           persisted.activeId = persisted.games[0].id;
         }
-        if (!persisted.activeId) persisted.activeId = persisted.games[0].id;
+        if (!persisted.activeId) persisted.activeId = persisted.games[persisted.games.length - 1].id;
+        // Дефолтная команда забирает старый логотип из media.teamLogo
+        if (!persisted.teams.length) {
+          const t = mkTeam('My Team');
+          t.logo = persisted.media?.teamLogo || null;
+          persisted.teams = [t];
+        }
+        if (!persisted.seasons.length) {
+          persisted.seasons = [mkSeason(currentSeasonName(), persisted.teams[0].id)];
+        }
+        const sid = persisted.seasons[0].id;
+        persisted.activeSeasonId = persisted.activeSeasonId || sid;
+        persisted.games = persisted.games.map((g: Game) => ({ ...g, seasonId: g.seasonId || sid }));
         return persisted as AppState;
       },
     }

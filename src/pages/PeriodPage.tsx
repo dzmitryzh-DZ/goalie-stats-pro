@@ -86,10 +86,22 @@ export default function PeriodPage() {
   const goalies = useStore(s => s.goalies);
   const setActiveGame = useStore(s => s.setActiveGame);
   const media = useStore(s => s.media);
+  const seasons = useStore(s => s.seasons);
+  const teams = useStore(s => s.teams);
+  const activeSeasonId = useStore(s => s.activeSeasonId);
   const navigate = useNavigate();
 
+  const activeSeason = seasons.find(s => s.id === activeSeasonId) || null;
+  const seasonTeam = activeSeason?.teamId ? teams.find(t => t.id === activeSeason.teamId) : null;
+
+  // Только игры активного сезона
+  const seasonGames = useMemo(
+    () => (activeSeasonId ? games.filter(g => g.seasonId === activeSeasonId) : games),
+    [games, activeSeasonId]
+  );
+
   // Date range state
-  const sortedGames = useMemo(() => [...games].sort((a, b) => a.date < b.date ? -1 : 1), [games]);
+  const sortedGames = useMemo(() => [...seasonGames].sort((a, b) => a.date < b.date ? -1 : 1), [seasonGames]);
   const [dateFrom, setDateFrom] = useState(sortedGames[0]?.date || '');
   const [dateTo, setDateTo] = useState(sortedGames[sortedGames.length - 1]?.date || '');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
@@ -285,7 +297,7 @@ export default function PeriodPage() {
       {/* Scope — дата + выбор игр */}
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-center">
-          <span className={MICRO}>Season scope</span>
+          <span className={MICRO}>Season scope{activeSeason ? ` · 🏆 ${activeSeason.name}` : ''}</span>
           <span className="flex-1" />
           <label className="text-xs font-semibold text-mut">From</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-white" />
@@ -641,11 +653,11 @@ export default function PeriodPage() {
       <div className="print-report hidden space-y-5 text-[11px] leading-snug text-black">
         {/* Шапка */}
         <div className="flex items-center gap-3 pb-3 border-b-2 border-black">
-          {media.teamLogo && <img src={media.teamLogo} alt="" className="w-10 h-10 object-contain" />}
+          {(seasonTeam?.logo || media.teamLogo) && <img src={seasonTeam?.logo || media.teamLogo || ''} alt="" className="w-10 h-10 object-contain" />}
           <div>
             <div className="text-xl font-black tracking-tight">GOALIE STATS PRO — SEASON REPORT</div>
             <div className="text-[10px] text-neutral-600 mt-0.5">
-              Period: {dateFrom || 'start'} — {dateTo || 'now'} · {selectedGames.length} game(s) · Generated {new Date().toLocaleDateString('ru-RU')}
+              Season: {activeSeason?.name || '—'}{seasonTeam ? ` · Team: ${seasonTeam.name}` : ''} · Period: {dateFrom || 'start'} — {dateTo || 'now'} · {selectedGames.length} game(s) · Generated {new Date().toLocaleDateString('ru-RU')}
             </div>
           </div>
           <div className="flex-1" />
