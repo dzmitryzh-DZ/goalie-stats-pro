@@ -45,6 +45,34 @@ function recordParts(games: Game[]) {
 const badgeStyle = (gf: number, ga: number): [string, string] =>
   gf > ga ? ['W', '#059669'] : gf < ga ? ['L', '#dc2626'] : ['T', '#9ca3af'];
 
+// ── SVG sparkline по всем выбранным играм (1 точка — просто круг) ──
+function SeasonSpark({ pts }: { pts: { date: string; sv: number; shots: number; goals: number; opp: string }[] }) {
+  const W = 640, H = 56, PAD = 8;
+  if (!pts.length) return <div className="h-14" />;
+  const lo = Math.min(...pts.map(p => p.sv), 80) - 1.5;
+  const hi = Math.max(...pts.map(p => p.sv), 95) + 1.5;
+  const x = (i: number) => PAD + i * (W - 2 * PAD) / Math.max(1, pts.length - 1);
+  const y = (v: number) => H - PAD - (v - lo) / (hi - lo) * (H - 2 * PAD);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.sv).toFixed(1)}`).join(' ');
+  const avg = pts.reduce((a, p) => a + p.sv, 0) / pts.length;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-14" preserveAspectRatio="none" aria-hidden="true">
+      {pts.length > 1 && (
+        <>
+          <path d={`${d} L${x(pts.length - 1).toFixed(1)},${H - PAD} L${x(0).toFixed(1)},${H - PAD} Z`} fill={INK} opacity="0.05" />
+          <line x1={PAD} x2={W - PAD} y1={y(avg)} y2={y(avg)} stroke={INK} strokeWidth="0.6" strokeDasharray="3 3" opacity="0.3" />
+          <path d={d} fill="none" stroke={INK} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        </>
+      )}
+      {pts.map((p, i) => (
+        <circle key={i} cx={x(i)} cy={y(p.sv)} r={pts.length === 1 ? 4 : 3} fill={svColor(p.sv)} stroke="#fff" strokeWidth="1">
+          <title>{`${fmtDate(p.date)}${p.opp ? ' vs ' + p.opp : ''}: ${p.shots - p.goals}/${p.shots} — SV ${p.sv.toFixed(1)}%`}</title>
+        </circle>
+      ))}
+    </svg>
+  );
+}
+
 export default function PeriodPage() {
   const games = useStore(s => s.games);
   const goalies = useStore(s => s.goalies);
@@ -98,6 +126,20 @@ export default function PeriodPage() {
       selectedGames.forEach(g => { toi += (g.toi && +g.toi[p.id]) || 0; });
       return { ...p, s, g: gg, ng, toi, gaa: gaa(gg, toi, ng) };
     });
+  }, [selectedGames, goalies]);
+
+  // Sparkline: SV% по ВСЕМ выбранным играм, отдельно по каждому вратарю
+  const sparkRows = useMemo(() => {
+    return goalies.map(p => {
+      const pts: { date: string; sv: number; shots: number; goals: number; opp: string }[] = [];
+      selectedGames.forEach(g => {
+        let s = 0, gg = 0;
+        g.events.forEach(e => { if (e.g === p.id) { s++; if (e.t === 'goal') gg++; } });
+        if (s > 0) pts.push({ date: g.date, sv: 100 * (s - gg) / s, shots: s, goals: gg, opp: g.opponent || '' });
+      });
+      const avg = pts.length ? pts.reduce((a, x) => a + x.sv, 0) / pts.length : null;
+      return { ...p, pts, avg };
+    }).filter(r => r.pts.length > 0);
   }, [selectedGames, goalies]);
 
   // Period breakdown
@@ -332,6 +374,33 @@ export default function PeriodPage() {
           </table>
         </div>
       </div>
+
+      {/* SV% dynamics by game — все выбранные игры */}
+      {sparkRows.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-baseline gap-3 mb-3">
+            <h3 className={MICRO}>SV% by game · all {selectedGames.length} selected</h3>
+            <span className="text-[10px] text-mut">dot color = save quality · dashed line = average</span>
+          </div>
+          <div className="divide-y divide-line/60">
+            {sparkRows.map((row, ri) => (
+              <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
+                <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
+                  {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
+                  <span className="font-bold text-sm truncate">{row.name}</span>
+                </div>
+                <div className="flex-1 min-w-0"><SeasonSpark pts={row.pts} /></div>
+                <div className="text-right shrink-0 w-24">
+                  <div className="text-lg font-black tabular-nums leading-none" style={{ color: row.avg !== null ? svColor(row.avg) : undefined }}>
+                    {row.avg !== null ? row.avg.toFixed(1) : '—'}
+                  </div>
+                  <div className={MICRO + ' mt-1'}>avg SV%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Highlights */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
