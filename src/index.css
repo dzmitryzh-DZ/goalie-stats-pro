@@ -27,3 +27,15 @@ body { margin: 0; }
 .tab-active { background: #111827; color: white; border-color: #111827; }
 .btn-primary { @apply bg-acc text-white border-acc hover:bg-blue-800; }
 .btn-danger { @apply text-goal border-line hover:bg-red-50; }
+
+/* Плавное появление строк с каскадной задержкой: style="--i: n" */
+@keyframes dash-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-row { animation: dash-fade-in 0.35s cubic-bezier(.4,0,.2,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+
+/* Каскад фокуса: при наведении на таблицу соседние строки гаснут */
+.focus-cascade tbody:hover tr { opacity: 0.22; }
+.focus-cascade tbody tr:hover { opacity: 1; }
+.focus-cascade tbody tr { transition: opacity 0.15s ease; }
