@@ -4,6 +4,7 @@ import { useStore, currentSeasonName } from './store';
 import GamePage from './pages/GamePage';
 import PeriodPage from './pages/PeriodPage';
 import DashboardPage from './pages/DashboardPage';
+import SeasonsPage from './pages/SeasonsPage';
 import DataPanel from './components/DataPanel';
 import { fmtDate } from './utils/stats';
 
@@ -202,6 +203,7 @@ export default function App() {
             { to: '/', label: '🏒 Game' },
             { to: '/period', label: '📊 Season' },
             { to: '/dashboard', label: '📈 Dashboard' },
+            { to: '/seasons', label: '🏆 Seasons' },
           ].map(tab => (
             <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className={({ isActive }) =>
               `px-4 py-2 rounded-t-lg text-xs font-semibold border border-b-0 transition whitespace-nowrap ${isActive ? 'bg-white text-acc border-line border-b-white -mb-px z-10' : 'bg-transparent text-mut border-transparent hover:text-ink hover:bg-white/50'}`
@@ -215,6 +217,7 @@ export default function App() {
             <Route path="/" element={<GamePage />} />
             <Route path="/period" element={<PeriodPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/seasons" element={<SeasonsPage />} />
           </Routes>
         </main>
       </div>
