@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { checkDiskApi, saveToDisk, listDiskBackups, loadDiskBackup, deleteDiskBackup, DiskBackupInfo, DiskStatus } from '../utils/diskSync';
 import * as gist from '../utils/gist';
 import * as yndx from '../utils/yndx';
-import { encryptJSON } from '../utils/crypto';
+import { encryptJSON, decryptJSON } from '../utils/crypto';
 import { getSessionPassword } from '../utils/auth';
 import type { AppState } from '../types';
 
@@ -165,6 +165,93 @@ export default function DataPanel() {
     setCloudBusy(false);
   };
 
+
+  // ── Яндекс.Диск через REST API (работает с GitHub Pages, без сервера) ──
+  const [yndxToken, setYndxToken] = useState(yndx.getToken());
+  const [yndxInput, setYndxInput] = useState('');
+  const [yndxLogin, setYndxLogin] = useState<string | null>(null);
+  const [yndxBusy, setYndxBusy] = useState(false);
+
+  useEffect(() => {
+    if (!yndxToken) return;
+    yndx.checkToken()
+      .then(login => setYndxLogin(login))
+      .catch(() => { setYndxLogin(null); });
+  }, [yndxToken]);
+
+  const handleYndxConnect = async () => {
+    if (!yndxInput.trim()) return;
+    setYndxBusy(true);
+    try {
+      yndx.setToken(yndxInput);
+      const login = await yndx.checkToken();
+      setYndxToken(yndx.getToken());
+      setYndxLogin(login);
+      setYndxInput('');
+      flash(`✅ Яндекс.Диск подключён: ${login}`);
+    } catch (e: any) {
+      yndx.setToken(null);
+      setYndxToken(null);
+      flash(`❌ ${e?.message || e}`);
+    }
+    setYndxBusy(false);
+  };
+
+  const handleYndxDisconnect = () => {
+    yndx.setToken(null);
+    setYndxToken(null);
+    setYndxLogin(null);
+    flash('Яндекс-токен удалён из этого браузера');
+  };
+
+  // Файл на диске зашифрован паролем сайта — расшифровываем (legacy plain JSON проходит как есть)
+  const decryptCloudText = async (text: string): Promise<any> => {
+    try {
+      return await decryptJSON(text, getSessionPassword() ?? '');
+    } catch {
+      const p = typeof prompt === 'function' ? prompt('Файл на диске зашифрован. Введите пароль сайта:') : null;
+      if (!p) throw new Error('Нужен пароль сайта');
+      return await decryptJSON(text, p);
+    }
+  };
+
+  const handleYndxUpload = async () => {
+    const data = readLocalState();
+    if (!data) { flash('❌ Нет данных для сохранения'); return; }
+    if (!yndxToken) { flash('❌ Нужен токен Яндекс.Диска'); return; }
+    setYndxBusy(true);
+    try {
+      const pwd = getSessionPassword();
+      const content = pwd ? await encryptJSON(data, pwd) : JSON.stringify(data, null, 2);
+      await yndx.uploadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`, content);
+      flash('✅ Записано на Яндекс.Диск');
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setYndxBusy(false);
+  };
+
+  const handleYndxDownload = async (merge: boolean) => {
+    if (!yndxToken) { flash('❌ Нужен токен Яндекс.Диска'); return; }
+    setYndxBusy(true);
+    try {
+      const text = await yndx.downloadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`);
+      if (!text) { flash('На диске пока нет файла синхронизации'); setYndxBusy(false); return; }
+      const data = await decryptCloudText(text);
+      if (!data || !Array.isArray(data.games)) throw new Error('Файл синхронизации повреждён');
+      if (merge) {
+        const result = mergeData(data);
+        flash(`✅ Объединено: +${result.added} игр, +${result.goaliesAdded} вратарей`);
+      } else {
+        if (!confirm(`Заменить локальные данные данными с диска (${data.games.length} игр)?`)) { setYndxBusy(false); return; }
+        importData(data);
+        flash(`✅ Загружено с диска: ${data.games.length} игр`);
+      }
+    } catch (e: any) {
+      flash(`❌ Ошибка: ${e?.message || e}`);
+    }
+    setYndxBusy(false);
+  };
 
   // ── Автобэкап: debounce 10 сек после любого изменения ────
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -336,6 +423,75 @@ export default function DataPanel() {
             {disk.dir && <div className="px-3 py-2 text-[10px] text-mut break-all">Папка: {disk.dir}</div>}
           </div>
         )}
+      </div>
+
+      {/* ── Яндекс.Диск через REST API (работает с GitHub Pages, без сервера) ── */}
+      <div className="mt-3 pt-3 border-t border-line/60">
+        <div className="flex flex-wrap gap-3 items-center">
+          <span className="font-bold text-sm">☁️ Яндекс.Диск (облако)</span>
+          <span className="text-xs text-mut" title="Работает прямо из браузера, сервер не нужен">
+            REST API · без сервера
+          </span>
+          {yndxToken && yndxLogin && (
+            <span className="text-xs text-green-600 font-semibold">✓ {yndxLogin}</span>
+          )}
+          {yndxToken && !yndxLogin && (
+            <span className="text-xs text-mut">Проверка токена…</span>
+          )}
+          {!yndxToken && (
+            <>
+              <input
+                type="password"
+                value={yndxInput}
+                onChange={e => setYndxInput(e.target.value)}
+                placeholder="OAuth-токен Яндекс.Диска"
+                className="flex-1 min-w-[220px] rounded-lg border border-line px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-slate-200"
+              />
+              <button
+                onClick={handleYndxConnect}
+                disabled={yndxBusy || !yndxInput.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-700 transition disabled:opacity-50"
+              >
+                Подключить
+              </button>
+              <span className="text-[10px] text-mut w-full">Токен: yandex.ru/dev → «Полигон Яндекс.Диска» → OAuth-токен с правом cloud:disk. Хранится только в этом браузере.</span>
+            </>
+          )}
+          {yndxToken && (
+            <>
+              <button
+                onClick={handleYndxUpload}
+                disabled={yndxBusy}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+                title="Записать текущие данные в папку «Goalie Stats Backups» (зашифрованы паролем сайта)"
+              >
+                ⬆ На диск
+              </button>
+              <button
+                onClick={handleYndxDisconnect}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-red-50 text-red-500 transition"
+              >
+                Забыть токен
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => handleYndxDownload(false)}
+            disabled={yndxBusy}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+          >
+            ⬇ С диска (заменить)
+          </button>
+          <button
+            onClick={() => handleYndxDownload(true)}
+            disabled={yndxBusy}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-50"
+            title="Добавить игры с диска к локальным, вратари объединяются по имени"
+          >
+            🔀 Объединить
+          </button>
+          {msg && <span className="text-xs font-semibold text-acc animate-in fade-in">{msg}</span>}
+        </div>
       </div>
 
       {/* ── Облако: GitHub Gist (чтение без токена, запись по токену) ── */}
