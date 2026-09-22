@@ -1,9 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store';
 import { ZONES, PERIODS, STRENGTHS, TARGETS, PLAYS, STR_GRP_COLORS, STR_GRP_NAMES } from '../types';
-import type { Game, Event } from '../types';
+import type { Game } from '../types';
 import { aggEvents, totals, selTotals, pct, svClass, gaa, fmtDate, zoneName } from '../utils/stats';
 import { useNavigate } from 'react-router-dom';
+
+// Единый с дашбордом язык: коралл — акцент и худшая зона, тепло и каскады
+const ACCENT = 'rgb(255,130,100)';
+const INK = '#16181d';
+const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '#dc2626');
+const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 // Aggregate events across multiple games
 function aggGames(games: Game[]): Record<number, { s: number; g: number }> {
@@ -19,31 +25,25 @@ function aggGames(games: Game[]): Record<number, { s: number; g: number }> {
   return m;
 }
 
-// Record line (W-L by decision type)
-function recordLine(games: Game[]) {
-  let w = 0, l = 0;
+// Record W-L (decision types as sub-line)
+function recordParts(games: Game[]) {
+  let w = 0, l = 0, t = 0;
   const by: Record<string, { w: number; l: number }> = {};
   games.forEach(g => {
     if (!g.result) return;
     const gf = +g.result.gf || 0, ga = +g.result.ga || 0;
-    if (gf === ga) return;
+    if (gf === ga) { t++; return; }
     const dec = g.result.dec || 'REG';
     if (!by[dec]) by[dec] = { w: 0, l: 0 };
     if (gf > ga) { w++; by[dec].w++; } else { l++; by[dec].l++; }
   });
   const parts: string[] = [];
   ['REG', 'OT', 'SO'].forEach(d => { if (by[d]) parts.push(`${d} ${by[d].w}-${by[d].l}`); });
-  if (!w && !l) return '· no results entered';
-  return `· Record: ${w}-${l}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+  return { w, l, t, hasResults: !!(w || l || t), parts };
 }
 
-function resBadge(g: Game) {
-  if (!g.result || (g.result.gf == null && g.result.ga == null)) return '—';
-  const gf = +g.result.gf || 0, ga = +g.result.ga || 0;
-  const cls = gf > ga ? 'bg-emerald-100 text-emerald-800' : gf < ga ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700';
-  const lab = gf > ga ? 'W' : gf < ga ? 'L' : 'T';
-  return `<span class="${cls} px-2 py-0.5 rounded-full text-xs font-bold">${lab}</span> ${gf}:${ga}${g.result.dec ? ` (${g.result.dec})` : ''}`;
-}
+const badgeStyle = (gf: number, ga: number): [string, string] =>
+  gf > ga ? ['W', '#059669'] : gf < ga ? ['L', '#dc2626'] : ['T', '#9ca3af'];
 
 export default function PeriodPage() {
   const games = useStore(s => s.games);
@@ -75,6 +75,10 @@ export default function PeriodPage() {
   // All events and goal events from selected games
   const allEvents = selectedGames.flatMap(g => g.events);
   const goalEvents = allEvents.filter(e => e.t === 'goal');
+
+  const svVal = tt.s > 0 ? 100 * (tt.s - tt.g) / tt.s : null;
+  const dsvVal = st.s > 0 ? 100 * (st.s - st.g) / st.s : null;
+  const rec = recordParts(selectedGames);
 
   // Goalie summary
   const goalieStats = useMemo(() => {
@@ -143,7 +147,16 @@ export default function PeriodPage() {
       .concat(Object.entries(c).filter(([k]) => !PLAYS.includes(k)).map(([k, v]) => ({ name: k, count: v })));
   }, [goalEvents]);
 
-  // Highlights
+  // Худшая опасная зона (объём ≥3 по сумме) — коралловое кольцо
+  const worstZone = useMemo(() => {
+    let worst: number | null = null;
+    ZONES.filter(z => z.tier === 'sel').forEach(z => {
+      const c = m[z.id] || { s: 0, g: 0 };
+      if (c.s >= 3 && (worst === null || c.g / c.s > (m[worst]?.g || 0) / (m[worst]?.s || 1))) worst = z.id;
+    });
+    return worst;
+  }, [m]);
+
   const maxZone = useMemo(() => {
     let maxZ: number | null = null, maxS = -1;
     ZONES.filter(z => z.tier === 'sel').forEach(z => {
@@ -196,25 +209,32 @@ export default function PeriodPage() {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
   };
 
-  const maxBarS = Math.max(1, ...ZONES.map(z => (m[z.id] || { s: 0 }).s));
+  const kpis: [string, string | number, string | undefined][] = [
+    ['Games', selectedGames.length, undefined],
+    ['Shots', tt.s, undefined],
+    ['SV%', svVal !== null ? svVal.toFixed(1) : '—', svVal !== null ? svColor(svVal) : undefined],
+    ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) : '—', dsvVal !== null ? svColor(dsvVal) : undefined],
+    ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : '—', undefined],
+  ];
 
   return (
     <div className="space-y-4">
-      {/* Date Range & Game Selection */}
+      {/* Scope — дата + выбор игр */}
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-center">
-          <label className="text-sm font-semibold text-mut">From:</label>
+          <span className={MICRO}>Season scope</span>
+          <span className="flex-1" />
+          <label className="text-xs font-semibold text-mut">From</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-white" />
-          <label className="text-sm font-semibold text-mut">To:</label>
+          <label className="text-xs font-semibold text-mut">To</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-white" />
           <button onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">All</button>
           <button onClick={selectNone} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">None</button>
-          <span className="flex-1" />
-          <button onClick={exportCsv} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">📊 Export CSV</button>
+          <button onClick={exportCsv} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Export CSV</button>
         </div>
         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
           {rangeGames.map(g => (
-            <label key={g.id} className="flex items-center gap-2 px-3 py-1.5 border border-line rounded-lg bg-white cursor-pointer text-sm hover:bg-slate-50 transition">
+            <label key={g.id} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg cursor-pointer text-sm transition ${checked[g.id] ? 'border-slate-900 bg-white' : 'border-line bg-white opacity-50 hover:opacity-80'}`}>
               <input type="checkbox" checked={!!checked[g.id]} onChange={() => toggleCheck(g.id)} />
               <span>{fmtDate(g.date)}{g.opponent ? ` · ${g.opponent}` : ''}</span>
               <span className="text-xs text-mut">({g.events.length})</span>
@@ -224,47 +244,84 @@ export default function PeriodPage() {
         </div>
       </div>
 
-      {/* Aggregated Zone Stats */}
+      {/* KPI strip — сумма выбранных игр */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {kpis.map(([label, value, color], i) => (
+          <div key={label} className="card p-4 fade-row" style={{ ['--i' as any]: i }}>
+            <div className="text-2xl font-black tabular-nums leading-none" style={{ color: color || INK }}>{value}</div>
+            <div className={MICRO + ' mt-1.5'}>{label}</div>
+            {label === 'Record' && rec.parts.length > 0 && <div className="text-[10px] text-mut mt-1 tabular-nums">{rec.parts.join(' · ')}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Heat zone table — агрегат по зонам */}
       <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">📊 Sum over {selectedGames.length} game(s)</h3>
+        <div className="flex items-baseline gap-3 mb-3">
+          <h3 className={MICRO}>Shots by zone · sum over {selectedGames.length} game(s)</h3>
+          <span className="text-[10px] text-mut">SV% on heat · ring marks worst zone</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm focus-cascade">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-mut border-b border-line">
-                <th className="py-2 pr-4">Zone</th>
-                <th className="py-2 px-2 text-right">Shots</th>
-                <th className="py-2 px-2 text-right">Goals</th>
-                <th className="py-2 px-2 text-right">Saves</th>
-                <th className="py-2 px-2 text-right">SV%</th>
-                <th className="py-2 px-2 text-right">Conv%</th>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Zone</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Saves</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Conv%</th>
               </tr>
             </thead>
             <tbody>
-              {ZONES.map(z => {
-                const c = m[z.id] || { s: 0, g: 0 };
-                const isTot = z.tier === 'tot';
-                const isMax = z.tier === 'sel' && z.id === maxZone.id && maxZone.shots > 0;
-                return (
-                  <tr key={z.id} className={`border-b border-line/50 ${isTot ? 'text-mut bg-slate-50/50' : ''} ${isMax ? 'bg-yellow-50' : ''}`}>
-                    <td className="py-2 pr-4 font-medium">{z.id}. {z.name}{isTot && <span className="ml-2 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">total only</span>}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{c.s}<span className="inline-block w-16 h-1.5 bg-slate-100 rounded ml-2 align-middle overflow-hidden"><span className="block h-full bg-save rounded" style={{ width: `${100 * c.s / maxBarS}%` }} /></span></td>
-                    <td className="py-2 px-2 text-right tabular-nums font-bold text-goal">{c.g || '—'}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{c.s - c.g}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${svClass(c.s - c.g, c.s)}`}>{pct(c.s - c.g, c.s)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{pct(c.g, c.s)}</td>
-                  </tr>
-                );
-              })}
-              <tr className="font-bold bg-slate-50 border-t-2 border-line">
-                <td className="py-2 pr-4">TOTAL</td>
+              {(() => {
+                const maxS = Math.max(1, ...ZONES.map(z => (m[z.id] || { s: 0 }).s));
+                return ZONES.map((z, ri) => {
+                  const c = m[z.id] || { s: 0, g: 0 };
+                  const sv = c.s > 0 ? 100 * (c.s - c.g) / c.s : null;
+                  const a = c.s > 0 ? 0.06 + 0.8 * (c.s / maxS) : 0;
+                  const dark = a > 0.42;
+                  const isWorst = worstZone === z.id;
+                  return (
+                    <tr key={z.id} className={`border-b border-line/50 fade-row ${z.tier === 'tot' ? 'text-mut' : ''}`} style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
+                      <td className="py-2 pr-3 font-medium whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2 rounded-md px-1.5 py-0.5" style={{ boxShadow: isWorst ? `inset 0 0 0 2px ${ACCENT}` : 'none' }}>
+                          {z.id}. {z.name}
+                          {isWorst && <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {c.s}
+                        <span className="inline-block w-16 h-1.5 bg-slate-100 rounded ml-2 align-middle overflow-hidden">
+                          <span className="block h-full rounded" style={{ width: `${100 * c.s / maxS}%`, background: isWorst ? ACCENT : 'var(--save)' }} />
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: c.g ? '#dc2626' : undefined }}>{c.g || '—'}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{c.s - c.g}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {sv !== null
+                          ? <span
+                              className="inline-flex items-center justify-center min-w-[3.5rem] h-7 px-2 rounded-md text-xs font-bold"
+                              style={{ background: `rgba(22,24,29,${a.toFixed(2)})`, color: dark ? '#fff' : INK }}
+                              title={`${c.s} shots / ${c.g} GA`}
+                            >{sv.toFixed(1)}</span>
+                          : <span className="text-mut">—</span>}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-mut">{pct(c.g, c.s)}</td>
+                    </tr>
+                  );
+                });
+              })()}
+              <tr className="font-bold border-t-2 border-line">
+                <td className="py-2 pr-3">TOTAL</td>
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s}</td>
-                <td className="py-2 px-2 text-right tabular-nums text-goal">{tt.g || '—'}</td>
+                <td className="py-2 px-2 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g || '—'}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s - tt.g}</td>
                 <td className={`py-2 px-2 text-right tabular-nums ${svClass(tt.s - tt.g, tt.s)}`}>{pct(tt.s - tt.g, tt.s)}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{pct(tt.g, tt.s)}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-mut">{pct(tt.g, tt.s)}</td>
               </tr>
-              <tr className="text-mut bg-slate-50/50">
-                <td className="py-2 pr-4">Danger zones only</td>
+              <tr className="text-mut">
+                <td className="py-2 pr-3">Danger zones only</td>
                 <td className="py-2 px-2 text-right tabular-nums">{st.s}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{st.g}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{st.s - st.g}</td>
@@ -276,99 +333,75 @@ export default function PeriodPage() {
         </div>
       </div>
 
-      {/* Bars visualization */}
-      <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">Shots & Goals by Zone</h3>
-        <div className="flex gap-4 text-xs text-mut mb-2">
-          <span><span className="inline-block w-3 h-3 rounded bg-save opacity-60 align-middle mr-1"></span>Shots</span>
-          <span><span className="inline-block w-3 h-3 rounded bg-goal align-middle mr-1"></span>Goals</span>
-        </div>
-        <div className="space-y-1.5">
-          {ZONES.map(z => {
-            const c = m[z.id] || { s: 0, g: 0 };
-            return (
-              <div key={z.id} className="grid grid-cols-[180px_1fr_80px] gap-2 items-center text-sm">
-                <span className="truncate">{z.id}. {z.name}{z.tier === 'tot' && <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded ml-1">total</span>}</span>
-                <div className="h-4 bg-slate-100 rounded relative overflow-hidden">
-                  <div className="absolute inset-y-0 left-0 bg-save opacity-55 rounded" style={{ width: `${100 * c.s / maxBarS}%` }} />
-                  <div className="absolute inset-y-0 left-0 bg-goal rounded" style={{ width: `${100 * c.g / maxBarS}%` }} />
-                </div>
-                <span className="text-right text-xs text-mut tabular-nums">{c.s} / {c.g}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Highlights */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="card p-3 border-l-4 border-l-acc">
-          <div className="text-[11px] uppercase tracking-wide text-mut">Most shots (danger)</div>
-          <div className="text-sm font-bold mt-1">{maxZone.shots > 0 ? `Z${maxZone.id} · ${zoneName(maxZone.id!)} — ${maxZone.shots}` : 'no data'}</div>
-        </div>
-        <div className="card p-3 border-l-4 border-l-goal">
-          <div className="text-[11px] uppercase tracking-wide text-mut">Goals conceded from</div>
-          <div className="text-sm font-bold mt-1">{goalZones.length ? goalZones.join(', ') : 'no goals'}</div>
-        </div>
-        <div className="card p-3 border-l-4 border-l-acc">
-          <div className="text-[11px] uppercase tracking-wide text-mut">Outside danger zones</div>
-          <div className="text-sm font-bold mt-1">{tt.s - st.s} shot(s) — total only</div>
-          <div className="text-[11px] text-mut mt-1">{tt.s} shots over {selectedGames.length} game(s)</div>
-        </div>
-        <div className="card p-3 border-l-4 border-l-acc">
-          <div className="text-[11px] uppercase tracking-wide text-mut">Record</div>
-          <div className="text-sm font-bold mt-1">{recordLine(selectedGames)}</div>
-        </div>
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {[
+          ['Most shots (danger)', maxZone.shots > 0 ? `Z${maxZone.id} · ${zoneName(maxZone.id!)}` : 'no data', `${maxZone.shots} shots`, undefined],
+          ['Goals conceded from', goalZones.length ? goalZones.join(', ') : 'no goals', `${tt.g} GA`, '#dc2626'],
+          ['Outside danger zones', `${tt.s - st.s} shot(s)`, `${tt.s} total shots`, undefined],
+          ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : 'no results', rec.parts.join(' · ') || '—', undefined],
+        ].map(([label, value, sub, color], i) => (
+          <div key={label as string} className="card p-4 fade-row" style={{ ['--i' as any]: i + 2 }}>
+            <div className={MICRO}>{label}</div>
+            <div className="text-sm font-bold mt-1.5 truncate" style={{ color: color || INK }}>{value}</div>
+            <div className="text-[10px] text-mut mt-1 tabular-nums">{sub}</div>
+          </div>
+        ))}
       </div>
 
       {/* Per-game table */}
       <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">📅 Per-game stats <span className="text-sm font-normal text-mut">{recordLine(selectedGames)}</span></h3>
+        <div className="flex items-baseline gap-3 mb-3">
+          <h3 className={MICRO}>Per-game stats</h3>
+          <span className="text-[10px] text-mut">{selectedGames.length} game(s) · click row to open</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm focus-cascade">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-mut border-b border-line">
-                <th className="py-2 pr-3">Date</th>
-                <th className="py-2 pr-3">Opponent</th>
-                <th className="py-2 pr-3">Result</th>
-                <th className="py-2 px-2 text-right">Shots</th>
-                <th className="py-2 px-2 text-right">GA</th>
-                <th className="py-2 px-2 text-right">SV%</th>
-                <th className="py-2 px-2 text-left">Top zone</th>
-                <th className="py-2 px-2 text-right">GAA</th>
-                <th className="py-2 pl-3"></th>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Date</th>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Opponent</th>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Result</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
+                <th className={`${MICRO} py-2 px-2 text-left font-semibold`}>Top zone</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GAA</th>
+                <th className={`${MICRO} py-2 pl-3 font-semibold`}></th>
               </tr>
             </thead>
             <tbody>
-              {selectedGames.map(g => {
+              {selectedGames.map((g, ri) => {
                 const gm = aggEvents(g.events);
                 const t = totals(gm);
                 let toiG = 0;
                 Object.values(g.toi || {}).forEach(v => { toiG += (+v || 0); });
-                // Top danger zone by shots
                 let topZ: number | null = null, topS = -1;
                 ZONES.filter(z => z.tier === 'sel').forEach(z => {
                   const s = (gm[z.id] || { s: 0 }).s;
                   if (s > topS) { topS = s; topZ = z.id; }
                 });
+                const gsv = t.s > 0 ? 100 * (t.s - t.g) / t.s : null;
                 const r = g.result;
-                const badge = r ? (() => {
-                  const gf = +r.gf || 0, ga = +r.ga || 0;
-                  const cls = gf > ga ? 'bg-emerald-100 text-emerald-800' : gf < ga ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700';
-                  const lab = gf > ga ? 'W' : gf < ga ? 'L' : 'T';
-                  return <span className={`${cls} px-2 py-0.5 rounded-full text-xs font-bold`}>{lab} {gf}:{ga}{r.dec ? ` (${r.dec})` : ''}</span>;
-                })() : '—';
+                const [lab, col] = r ? badgeStyle(+r.gf || 0, +r.ga || 0) : ['—', '#9ca3af'];
                 return (
-                  <tr key={g.id} className="border-b border-line/50 hover:bg-slate-50">
-                    <td className="py-2 pr-3">{fmtDate(g.date)}</td>
+                  <tr key={g.id} className="border-b border-line/50 fade-row cursor-pointer" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }} onClick={() => handleOpenGame(g.id)}>
+                    <td className="py-2 pr-3 whitespace-nowrap">{fmtDate(g.date)}</td>
                     <td className="py-2 pr-3">{g.opponent || '—'}</td>
-                    <td className="py-2 pr-3">{badge}</td>
+                    <td className="py-2 pr-3">
+                      {r ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-6 h-6 rounded-md inline-flex items-center justify-center text-[10px] font-black text-white" style={{ background: col }}>{lab}</span>
+                          <span className="text-xs tabular-nums">{+r.gf || 0}:{+r.ga || 0}{r.dec ? ` (${r.dec})` : ''}</span>
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td className="py-2 px-2 text-right tabular-nums">{t.s}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-bold text-goal">{t.g || '—'}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${svClass(t.s - t.g, t.s)}`}>{pct(t.s - t.g, t.s)}</td>
-                    <td className="py-2 px-2 text-left text-xs">{topS > 0 ? `Z${topZ} · ${zoneName(topZ!)} (${topS})` : '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: t.g ? '#dc2626' : undefined }}>{t.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(t.s - t.g, t.s)}</td>
+                    <td className="py-2 px-2 text-left text-xs text-mut">{topS > 0 ? `Z${topZ} · ${zoneName(topZ!)} (${topS})` : '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{gaa(t.g, toiG, 1)}</td>
-                    <td className="py-2 pl-3"><button onClick={() => handleOpenGame(g.id)} className="text-xs px-2 py-1 rounded border border-line hover:bg-slate-100">open</button></td>
+                    <td className="py-2 pl-3"><span className="text-[11px] font-semibold pb-0.5 border-b-2" style={{ borderColor: ACCENT, color: INK }}>open</span></td>
                   </tr>
                 );
               })}
@@ -380,121 +413,138 @@ export default function PeriodPage() {
 
       {/* Goalie Summary */}
       <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">🥅 By goalie (selected games)</h3>
+        <h3 className={MICRO + ' mb-3'}>By goalie · selected games</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm focus-cascade">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-mut border-b border-line">
-                <th className="py-2 pr-3">Goalie</th>
-                <th className="py-2 px-2 text-right">Games</th>
-                <th className="py-2 px-2 text-right">Shots</th>
-                <th className="py-2 px-2 text-right">GA</th>
-                <th className="py-2 px-2 text-right">SV%</th>
-                <th className="py-2 px-2 text-right">Minutes</th>
-                <th className="py-2 px-2 text-right">GAA</th>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Goalie</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Games</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Minutes</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GAA</th>
               </tr>
             </thead>
             <tbody>
-              {goalieStats.map(p => (
-                <tr key={p.id} className="border-b border-line/50">
-                  <td className="py-2 pr-3 font-medium flex items-center gap-2">{p.photo && <img src={p.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" />}{p.name}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{p.ng}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
-                  <td className="py-2 px-2 text-right tabular-nums font-bold text-goal">{p.g || '—'}</td>
-                  <td className={`py-2 px-2 text-right tabular-nums ${svClass(p.s - p.g, p.s)}`}>{pct(p.s - p.g, p.s)}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{p.toi || '—'}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{p.gaa}</td>
-                </tr>
-              ))}
+              {goalieStats.map((p, ri) => {
+                const gsv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
+                return (
+                  <tr key={p.id} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
+                    <td className="py-2 pr-3 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{p.photo && <img src={p.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" />}{p.name}</div></td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.ng}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.toi ? Math.round(p.toi) : '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.gaa}</td>
+                  </tr>
+                );
+              })}
               {!selectedGames.length && <tr><td colSpan={7} className="py-4 text-center text-mut text-sm">Select games above.</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Breakdowns */}
+      {/* GA breakdown — плоские строки с точками-группами, как на дашборде */}
       <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">🧾 Goals-against breakdown</h3>
+        <h3 className={MICRO + ' mb-3'}>Goals-against breakdown</h3>
         <div className="grid md:grid-cols-3 gap-6">
           {/* Strength */}
           <div>
-            <div className="text-xs uppercase tracking-wide text-mut mb-2">Strength (even / uneven)</div>
-            <table className="w-full text-sm">
-              <tbody>
-                {['even', 'pk', 'pp', 'ea', 'ps'].map(grp => {
-                  const cnt = strBreakdown.byGrp[grp];
-                  if (!cnt) return null;
-                  const grpNames = STR_GRP_NAMES;
-                  const grpColors = STR_GRP_COLORS;
-                  return (
-                    <React.Fragment key={grp}>
-                      <tr className="font-bold bg-slate-50">
-                        <td className="py-1"><span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ background: grpColors[grp] }}></span>{grpNames[grp]}</td>
-                        <td className="py-1 text-right tabular-nums">{cnt}</td>
-                      </tr>
+            <div className={MICRO + ' mb-2'}>Strength</div>
+            <div className="divide-y divide-line/60">
+              {['even', 'pk', 'pp', 'ea', 'ps'].map(grp => {
+                const cnt = strBreakdown.byGrp[grp];
+                if (!cnt) return null;
+                return (
+                  <div key={grp} className="py-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STR_GRP_COLORS[grp] }} />
+                      <span className="font-bold text-sm flex-1">{STR_GRP_NAMES[grp]}</span>
+                      <span className="text-sm font-bold tabular-nums">{cnt}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 pl-4">
                       {STRENGTHS.filter(s => s.grp === grp && strBreakdown.byStr[s.id]).map(s => (
-                        <tr key={s.id}><td className="py-0.5 pl-6 text-mut">{s.id}</td><td className="py-0.5 text-right tabular-nums">{strBreakdown.byStr[s.id]}</td></tr>
+                        <span key={s.id} className="text-[11px] text-mut tabular-nums">{s.id} <b className="text-ink">{strBreakdown.byStr[s.id]}</b></span>
                       ))}
-                    </React.Fragment>
-                  );
-                })}
-                {!goalEvents.length && <tr><td colSpan={2} className="py-2 text-mut text-xs">no goals conceded</td></tr>}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                );
+              })}
+              {!goalEvents.length && <div className="py-2 text-mut text-xs">no goals conceded</div>}
+            </div>
           </div>
           {/* Target */}
           <div>
-            <div className="text-xs uppercase tracking-wide text-mut mb-2">Where the goal went in</div>
-            <table className="w-full text-sm">
-              <tbody>
-                {tgtBreakdown.map(t => (
-                  <tr key={t.name}><td className="py-0.5">{t.name}</td><td className="py-0.5 text-right tabular-nums">{t.count}<span className="inline-block w-12 h-1.5 bg-red-100 rounded ml-2 align-middle overflow-hidden"><span className="block h-full bg-goal rounded" style={{ width: `${100 * t.count / Math.max(1, ...tgtBreakdown.map(x => x.count))}%` }} /></span></td></tr>
-                ))}
-                {!goalEvents.length && <tr><td colSpan={2} className="py-2 text-mut text-xs">no goals conceded</td></tr>}
-              </tbody>
-            </table>
+            <div className={MICRO + ' mb-2'}>Where the goal went in</div>
+            <div className="divide-y divide-line/60">
+              {tgtBreakdown.map(t => {
+                const maxC = Math.max(1, ...tgtBreakdown.map(x => x.count));
+                return (
+                  <div key={t.name} className="py-2 flex items-center gap-3 text-sm">
+                    <span className="flex-1">{t.name}</span>
+                    <span className="w-20 h-1.5 bg-red-100 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * t.count / maxC}%` }} /></span>
+                    <span className="font-bold tabular-nums w-6 text-right">{t.count}</span>
+                  </div>
+                );
+              })}
+              {!goalEvents.length && <div className="py-2 text-mut text-xs">no goals conceded</div>}
+            </div>
           </div>
           {/* Play */}
           <div>
-            <div className="text-xs uppercase tracking-wide text-mut mb-2">How it was scored (play)</div>
-            <table className="w-full text-sm">
-              <tbody>
-                {playBreakdown.map(p => (
-                  <tr key={p.name}><td className="py-0.5">{p.name}</td><td className="py-0.5 text-right tabular-nums">{p.count}<span className="inline-block w-12 h-1.5 bg-red-100 rounded ml-2 align-middle overflow-hidden"><span className="block h-full bg-goal rounded" style={{ width: `${100 * p.count / Math.max(1, ...playBreakdown.map(x => x.count))}%` }} /></span></td></tr>
-                ))}
-                {!goalEvents.length && <tr><td colSpan={2} className="py-2 text-mut text-xs">no goals conceded</td></tr>}
-              </tbody>
-            </table>
+            <div className={MICRO + ' mb-2'}>How it was scored</div>
+            <div className="divide-y divide-line/60">
+              {playBreakdown.map(p => {
+                const maxC = Math.max(1, ...playBreakdown.map(x => x.count));
+                return (
+                  <div key={p.name} className="py-2 flex items-center gap-3 text-sm">
+                    <span className="flex-1">{p.name}</span>
+                    <span className="w-20 h-1.5 bg-red-100 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * p.count / maxC}%` }} /></span>
+                    <span className="font-bold tabular-nums w-6 text-right">{p.count}</span>
+                  </div>
+                );
+              })}
+              {!goalEvents.length && <div className="py-2 text-mut text-xs">no goals conceded</div>}
+            </div>
           </div>
         </div>
       </div>
 
       {/* By Period */}
       <div className="card p-4">
-        <h3 className="font-bold text-lg mb-3">⏱ By period (selected games)</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-mut border-b border-line">
-              <th className="py-2 pr-4">Period</th>
-              <th className="py-2 px-2 text-right">Shots</th>
-              <th className="py-2 px-2 text-right">Goals</th>
-              <th className="py-2 px-2 text-right">Saves</th>
-              <th className="py-2 px-2 text-right">SV%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {periodStats.map(p => (
-              <tr key={p.period} className="border-b border-line/50">
-                <td className="py-2 pr-4 font-medium">{p.period === '—' ? 'not set' : p.period}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
-                <td className="py-2 px-2 text-right tabular-nums font-bold text-goal">{p.g || '—'}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{p.s - p.g}</td>
-                <td className={`py-2 px-2 text-right tabular-nums ${svClass(p.s - p.g, p.s)}`}>{pct(p.s - p.g, p.s)}</td>
+        <h3 className={MICRO + ' mb-3'}>Performance by period</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm focus-cascade">
+            <thead>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-4 font-semibold`}>Period</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Saves</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
               </tr>
-            ))}
-            {!allEvents.length && <tr><td colSpan={5} className="py-4 text-center text-mut text-sm">no events</td></tr>}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {periodStats.map((p, ri) => {
+                const sv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
+                return (
+                  <tr key={p.period} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
+                    <td className="py-2 pr-4 font-medium">{p.period === '—' ? 'not set' : p.period}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{p.s - p.g}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: sv !== null ? svColor(sv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
+                  </tr>
+                );
+              })}
+              {!allEvents.length && <tr><td colSpan={5} className="py-4 text-center text-mut text-sm">no events</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

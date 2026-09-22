@@ -2,7 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore, useActiveGame } from '../store';
 import { ZONES, PERIODS, STRENGTHS, TARGETS, PLAYS, ZONE_PATHS, LABEL_POS, STR_GRP_COLORS } from '../types';
 import type { Event } from '../types';
-import { aggEvents, totals, selTotals, pct, svClass, zoneName, normalizeTime, gaa } from '../utils/stats';
+import { aggEvents, totals, selTotals, pct, svClass, zoneName, normalizeTime, gaa, fmtDate } from '../utils/stats';
+
+// Единый с дашбордом язык: коралл — акцент, микро-лейблы, тепло и каскады
+const ACCENT = 'rgb(255,130,100)';
+const INK = '#16181d';
+const svColor = (sv: number) => (sv >= 92 ? '#059669' : sv >= 88 ? '#d97706' : '#dc2626');
+const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 /** Self-contained time input that commits on blur and Enter (Enter triggers blur).
  *  NO unmount-commit: when another row is deleted, all rows below it remount with
@@ -111,8 +117,27 @@ export default function GamePage() {
   const tooltipZone = hoverZone != null ? ZONES.find(z => z.id === hoverZone) : null;
   const tooltipStats = hoverZone != null ? (m[hoverZone] || { s: 0, g: 0 }) : null;
 
+  // KPI текущей игры (с учётом фильтра вратаря)
+  const svVal = tt.s > 0 ? 100 * (tt.s - tt.g) / tt.s : null;
+  const dsvVal = st.s > 0 ? 100 * (st.s - st.g) / st.s : null;
+
+  // Худшая опасная зона (объём ≥3) — коралловое кольцо в таблице
+  let worstZone: number | null = null;
+  ZONES.filter(z => z.tier === 'sel').forEach(z => {
+    const c = m[z.id] || { s: 0, g: 0 };
+    if (c.s >= 3 && (worstZone === null || c.g / c.s > (m[worstZone]?.g || 0) / (m[worstZone]?.s || 1))) worstZone = z.id;
+  });
+
+  const kpis: [string, string | number, string | undefined][] = [
+    ['Shots', tt.s, undefined],
+    ['Goals against', tt.g || '—', tt.g ? '#dc2626' : undefined],
+    ['SV%', svVal !== null ? svVal.toFixed(1) : '—', svVal !== null ? svColor(svVal) : undefined],
+    ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) : '—', dsvVal !== null ? svColor(dsvVal) : undefined],
+    ['GAA', gaa(tt.g, 0, 1), undefined],
+  ];
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {/* Controls */}
       <div className="card px-3 py-2 space-y-2">
         <div className="flex flex-wrap gap-2 items-center">
@@ -182,8 +207,18 @@ export default function GamePage() {
         )}
       </div>
 
+      {/* KPI strip — текущая игра */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {kpis.map(([label, value, color], i) => (
+          <div key={label} className="card p-4 fade-row" style={{ ['--i' as any]: i }}>
+            <div className="text-2xl font-black tabular-nums leading-none" style={{ color: color || INK }}>{value}</div>
+            <div className={MICRO + ' mt-1.5'}>{label}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Main Grid: Rink + Log */}
-      <div className="grid lg:grid-cols-[1fr_340px] gap-3">
+      <div className="grid lg:grid-cols-[1fr_340px] gap-4">
         {/* Rink */}
         <div className="card p-2 relative">
           {locked && (
@@ -229,19 +264,12 @@ export default function GamePage() {
               <div className="text-mut">{tooltipStats.s} shots · {tooltipStats.g} goals · SV% {pct(tooltipStats.s - tooltipStats.g, tooltipStats.s)}</div>
             </div>
           )}
-          {/* Compact stats bar */}
-          <div className="flex items-center justify-center gap-4 mt-1 py-1 text-xs border-t border-line/50">
-            <span><b>{tt.s}</b> <span className="text-mut">shots</span></span>
-            <span className="text-goal"><b>{tt.g}</b> <span className="text-mut">goals</span></span>
-            <span><b>{pct(tt.s - tt.g, tt.s)}</b> <span className="text-mut">SV%</span></span>
-            <span><b>{gaa(tt.g, 0, 1)}</b> <span className="text-mut">GAA</span></span>
-          </div>
         </div>
 
         {/* Event Log */}
         <div className="card p-3 flex flex-col max-h-[500px]">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-sm">📋 Event Log</h3>
+            <h3 className={MICRO}>Event log</h3>
             <div className="flex items-center gap-2">
               <span className="text-xs text-mut">{filteredEvents.length}{goalieFilter ? ' (filtered)' : ''}</span>
               <button onClick={() => setEditMode(!editMode)} className={`text-xs px-2 py-1 rounded border transition ${editMode ? 'bg-acc text-white border-acc' : 'border-line hover:bg-slate-50'}`}>{editMode ? '💾 Save' : '✎ Edit'}</button>
@@ -253,7 +281,7 @@ export default function GamePage() {
               const isGoal = e.t === 'goal';
               if (!editMode) {
                 return (
-                  <div key={`${e.ts}-${ri}`} className={`flex items-center gap-1.5 text-xs p-1.5 rounded border-b border-dashed border-line last:border-0 ${isGoal ? 'bg-red-50' : ''}`}>
+                  <div key={`${e.ts}-${ri}`} className={`flex items-center gap-1.5 text-xs p-1.5 rounded border-b border-dashed border-line last:border-0 fade-row ${isGoal ? 'bg-red-50' : ''}`} style={{ ['--i' as any]: Math.min(ri, 8) }}>
                     <span className="bg-indigo-100 text-indigo-900 text-[10px] font-bold px-1 py-0.5 rounded min-w-[20px] text-center">{e.p || '—'}</span>
                     <span className="text-mut tabular-nums min-w-[38px]">{e.time || '--:--'}</span>
                     <span className="font-semibold truncate flex-1">Z{e.z}</span>
@@ -298,50 +326,115 @@ export default function GamePage() {
 
       {/* Goalie Filter */}
       <div className="card px-3 py-1.5 flex flex-wrap gap-2 items-center">
-        <label className="text-xs font-semibold text-mut">Filter stats:</label>
+        <label className={MICRO}>Filter stats</label>
         <select value={goalieFilter} onChange={e => setGoalieFilter(e.target.value)} className="border border-line rounded-lg px-2 py-1 text-xs bg-white">
           <option value="">all goalies</option>
           {goalies.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {goalieFilter && <span className="text-[10px] text-acc font-semibold">Showing {filteredEvents.length} of {game.events.length} events</span>}
+        {goalieFilter && <span className="text-[10px] font-semibold" style={{ color: ACCENT }}>Showing {filteredEvents.length} of {game.events.length} events</span>}
       </div>
 
-      {/* Zone Stats Table */}
-      <div className="card px-3 py-2">
-        <h3 className="font-bold text-sm mb-1.5">🥅 Zone Stats</h3>
+      {/* Zone Stats Table — тепловая, худшая зона с коралловым кольцом */}
+      <div className="card p-4">
+        <div className="flex items-baseline gap-3 mb-3">
+          <h3 className={MICRO}>Zone stats · this game</h3>
+          <span className="text-[10px] text-mut">SV% on heat · ring marks worst zone</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-[10px] uppercase tracking-wider text-mut border-b border-line"><th className="py-1.5 pr-3">Zone</th><th className="py-1.5 px-1 text-right">Shots</th><th className="py-1.5 px-1 text-right">Goals</th><th className="py-1.5 px-1 text-right">Saves</th><th className="py-1.5 px-1 text-right">SV%</th></tr></thead>
+          <table className="w-full text-sm focus-cascade">
+            <thead>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-3 font-semibold`}>Zone</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Saves</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
+              </tr>
+            </thead>
             <tbody>
-              {ZONES.map(z => { const c = m[z.id] || { s: 0, g: 0 }; return (<tr key={z.id} className={`border-b border-line/50 ${z.tier === 'tot' ? 'text-mut bg-slate-50/50' : ''}`}><td className="py-1.5 pr-3 font-medium">{z.id}. {z.name}</td><td className="py-1.5 px-1 text-right tabular-nums">{c.s}</td><td className="py-1.5 px-1 text-right tabular-nums font-bold text-goal">{c.g || '—'}</td><td className="py-1.5 px-1 text-right tabular-nums">{c.s - c.g}</td><td className={`py-1.5 px-1 text-right tabular-nums ${svClass(c.s - c.g, c.s)}`}>{pct(c.s - c.g, c.s)}</td></tr>); })}
-              <tr className="font-bold bg-slate-50 border-t-2 border-line"><td className="py-1.5 pr-3">TOTAL</td><td className="py-1.5 px-1 text-right tabular-nums">{tt.s}</td><td className="py-1.5 px-1 text-right tabular-nums text-goal">{tt.g || '—'}</td><td className="py-1.5 px-1 text-right tabular-nums">{tt.s - tt.g}</td><td className={`py-1.5 px-1 text-right tabular-nums ${svClass(tt.s - tt.g, tt.s)}`}>{pct(tt.s - tt.g, tt.s)}</td></tr>
+              {(() => {
+                const maxS = Math.max(1, ...ZONES.map(z => (m[z.id] || { s: 0 }).s));
+                return ZONES.map((z, ri) => {
+                  const c = m[z.id] || { s: 0, g: 0 };
+                  const sv = c.s > 0 ? 100 * (c.s - c.g) / c.s : null;
+                  const a = c.s > 0 ? 0.06 + 0.8 * (c.s / maxS) : 0;
+                  const dark = a > 0.42;
+                  const isWorst = worstZone === z.id;
+                  return (
+                    <tr key={z.id} className={`border-b border-line/50 fade-row ${z.tier === 'tot' ? 'text-mut' : ''}`} style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
+                      <td className="py-2 pr-3 font-medium whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2 rounded-md px-1.5 py-0.5" style={{ boxShadow: isWorst ? `inset 0 0 0 2px ${ACCENT}` : 'none' }}>
+                          {z.id}. {z.name}
+                          {isWorst && <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {c.s}
+                        <span className="inline-block w-16 h-1.5 bg-slate-100 rounded ml-2 align-middle overflow-hidden">
+                          <span className="block h-full rounded" style={{ width: `${100 * c.s / maxS}%`, background: isWorst ? ACCENT : 'var(--save)' }} />
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: c.g ? '#dc2626' : undefined }}>{c.g || '—'}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{c.s - c.g}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {sv !== null
+                          ? <span
+                              className="inline-flex items-center justify-center min-w-[3.5rem] h-7 px-2 rounded-md text-xs font-bold"
+                              style={{ background: `rgba(22,24,29,${a.toFixed(2)})`, color: dark ? '#fff' : INK }}
+                              title={`${c.s} shots / ${c.g} GA`}
+                            >{sv.toFixed(1)}</span>
+                          : <span className="text-mut">—</span>}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+              <tr className="font-bold border-t-2 border-line">
+                <td className="py-2 pr-3">TOTAL</td>
+                <td className="py-2 px-2 text-right tabular-nums">{tt.s}</td>
+                <td className="py-2 px-2 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g || '—'}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{tt.s - tt.g}</td>
+                <td className={`py-2 px-2 text-right tabular-nums ${svClass(tt.s - tt.g, tt.s)}`}>{pct(tt.s - tt.g, tt.s)}</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Goalies in this game + TOI */}
-      <div className="card px-3 py-2">
-        <h3 className="font-bold text-sm mb-1.5">🏒 Goalies in this game</h3>
-        <table className="w-full text-xs">
-          <thead><tr className="text-left text-[10px] uppercase tracking-wider text-mut border-b border-line"><th className="py-1.5 pr-2">Goalie</th><th className="py-1.5 px-1 text-right">Shots</th><th className="py-1.5 px-1 text-right">GA</th><th className="py-1.5 px-1 text-right">SV%</th><th className="py-1.5 px-1 text-right">Min</th><th className="py-1.5 px-1 text-right">GAA</th></tr></thead>
-          <tbody>{(() => {
-            const ids = new Set<string>(); game.events.forEach(e => ids.add(e.g)); if (game.goalieId) ids.add(game.goalieId);
-            return Array.from(ids).map(gid => { let s = 0, gg = 0; game.events.forEach(e => { if (e.g === gid) { s++; if (e.t === 'goal') gg++; } }); const toi = (game.toi && +game.toi[gid]) || 0;
-              return (<tr key={gid} className="border-b border-line/50"><td className="py-1.5 pr-2 font-medium flex items-center gap-1.5">{(() => { const gp = goalies.find(p => p.id === gid); return gp?.photo ? <img src={gp.photo} alt="" className="w-5 h-5 rounded-full object-cover bg-gray-200" /> : null; })()}{goalies.find(p => p.id === gid)?.name || '—'}</td><td className="py-1.5 px-1 text-right tabular-nums">{s}</td><td className="py-1.5 px-1 text-right tabular-nums font-bold text-goal">{gg || '—'}</td><td className={`py-1.5 px-1 text-right tabular-nums ${svClass(s - gg, s)}`}>{pct(s - gg, s)}</td><td className="py-1.5 px-1 text-right"><input type="number" min="0" max="300" step="0.5" value={toi || ''} onChange={e => setGameToi(game.id, gid, parseFloat(e.target.value) || 0)} placeholder="60" className="border border-line rounded px-1 py-0.5 w-12 text-right text-xs" /></td><td className="py-1.5 px-1 text-right tabular-nums">{gaa(gg, toi, 1)}</td></tr>);
-            });
-          })()}</tbody>
-        </table>
+      <div className="card p-4">
+        <h3 className={MICRO + ' mb-3'}>Goalies in this game</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm focus-cascade">
+            <thead>
+              <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
+                <th className={`${MICRO} py-2 pr-2 font-semibold`}>Goalie</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Shots</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GA</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>SV%</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>Min</th>
+                <th className={`${MICRO} py-2 px-2 text-right font-semibold`}>GAA</th>
+              </tr>
+            </thead>
+            <tbody>{(() => {
+              const ids = new Set<string>(); game.events.forEach(e => ids.add(e.g)); if (game.goalieId) ids.add(game.goalieId);
+              return Array.from(ids).map((gid, ri) => { let s = 0, gg = 0; game.events.forEach(e => { if (e.g === gid) { s++; if (e.t === 'goal') gg++; } }); const toi = (game.toi && +game.toi[gid]) || 0; const gsv = s > 0 ? 100 * (s - gg) / s : null;
+                return (<tr key={gid} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}><td className="py-2 pr-2 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{(() => { const gp = goalies.find(p => p.id === gid); return gp?.photo ? <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" /> : null; })()}{goalies.find(p => p.id === gid)?.name || '—'}</div></td><td className="py-2 px-2 text-right tabular-nums">{s}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gg ? '#dc2626' : undefined }}>{gg || '—'}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(s - gg, s)}</td><td className="py-2 px-2 text-right"><input type="number" min="0" max="300" step="0.5" value={toi || ''} onChange={e => setGameToi(game.id, gid, parseFloat(e.target.value) || 0)} placeholder="60" className="border border-line rounded px-1 py-0.5 w-12 text-right text-xs" /></td><td className="py-2 px-2 text-right tabular-nums">{gaa(gg, toi, 1)}</td></tr>);
+              });
+            })()}</tbody>
+          </table>
+        </div>
       </div>
 
       {/* Result Input — key={game.id} resets uncontrolled inputs on game switch.
           GF input MUST have id="resGf": GA/dec handlers read it via getElementById. */}
-      <div className="card px-3 py-1.5 flex flex-wrap gap-2 items-center" key={game.id}>
-        <span className="font-bold text-xs">Result:</span>
+      <div className="card px-3 py-2 flex flex-wrap gap-2 items-center" key={game.id}>
+        <span className={MICRO + ' mr-1'}>Result</span>
         <input id="resGf" type="number" min="0" max="30" placeholder="GF" defaultValue={game.result?.gf ?? ''} onBlur={e => updateGameResult(game.id, +e.target.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="border border-line rounded px-2 py-1 w-12 text-center text-xs" />
         <span className="text-mut text-xs">:</span>
         <input id="resGa" type="number" min="0" max="30" placeholder="GA" defaultValue={game.result?.ga ?? ''} onBlur={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +e.target.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="border border-line rounded px-2 py-1 w-12 text-center text-xs" />
         <select id="resDec" defaultValue={game.result?.dec || ''} onChange={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, e.target.value)} className="border border-line rounded px-2 py-1 text-xs bg-white"><option value="">—</option><option value="REG">REG</option><option value="OT">OT</option><option value="SO">SO</option></select>
+        <span className="text-[10px] text-mut ml-auto">{fmtDate(game.date)}{game.opponent ? ` · vs ${game.opponent}` : ''}</span>
       </div>
     </div>
   );
