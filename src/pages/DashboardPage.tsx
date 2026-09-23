@@ -352,47 +352,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Period Performance */}
-          <div className="card p-4">
-            <h3 className={MICRO + ' mb-3'}>Performance by period</h3>
-            <div className="overflow-x-auto"><table className="w-full text-sm focus-cascade">
-              <thead>
-                <tr className="text-left border-b border-line" style={{ opacity: 0.45 }}>
-                  <th className={`${MICRO} py-2 pr-3 font-semibold`}>Goalie</th>
-                  {PERIODS.map(p => <th key={p} className={`${MICRO} py-2 px-2 text-center font-semibold`}>{p}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {periodPerf.map((row, ri) => (
-                  <tr key={row.id} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri + 3, transition: 'opacity 0.15s' }}>
-                    <td className="py-2 pr-3 font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" />}
-                        {row.name}
-                      </div>
-                    </td>
-                    {row.periods.map(p => {
-                      const sv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
-                      return (
-                        <td key={p.period} className="py-2 px-2 text-center tabular-nums">
-                          {p.s > 0
-                            ? <span className="font-bold" style={{ color: svColor(sv!) }}>{sv!.toFixed(1)}</span>
-                            : <span className="text-mut">—</span>}
-                          <span className="text-[10px] text-mut ml-1.5">{p.s ? `${p.s - p.g}/${p.s}` : ''}</span>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          </div>
-
           {/* Goals by period — просто количество голов за период */}
           <div className="card p-4">
             <div className="flex items-baseline gap-3 mb-3">
               <h3 className={MICRO}>Goals by period · season</h3>
-              <span className="text-[10px] text-mut">GA per period · green = none, warmer = more</span>
+              <span className="text-[10px] text-mut">GA per period · under = saves/shots · green = none, warmer = more</span>
             </div>
             <div className="divide-y divide-line/60">
               {periodPerf.map((row, ri) => {
@@ -409,7 +373,7 @@ export default function DashboardPage() {
                         if (!p || p.s === 0) return null;
                         const col = gaColor(p.g);
                         return (
-                          <div key={per} className="text-center" title={`Period ${per}: ${p.g} GA · ${p.s} shots`}>
+                          <div key={per} className="text-center" title={`Period ${per}: ${p.g} GA · ${p.s} shots · SV ${(100 * (p.s - p.g) / p.s).toFixed(1)}%`}>
                             <div
                               className="w-12 h-11 rounded-lg inline-flex items-center justify-center text-lg font-black tabular-nums"
                               style={{ color: col, background: `${col}18`, boxShadow: `inset 0 0 0 1px ${col}55` }}
@@ -417,6 +381,7 @@ export default function DashboardPage() {
                               {p.g}
                             </div>
                             <div className="text-[9px] font-bold text-mut mt-0.5">{per}</div>
+                            <div className="text-[8px] tabular-nums text-mut">{p.s - p.g}/{p.s}</div>
                           </div>
                         );
                       })}
