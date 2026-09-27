@@ -2,31 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Дизайн-токены · тёмная «трансляционная» тема ─────────────
+   Лёд поля — единственный светлый объект, всё внимание на нём.
+   При печати отчёта токены переопределяются на светлые.        */
 :root {
-  --bg: #f2f4f7;
-  --card: #ffffff;
-  --ink: #16181d;
-  --mut: #6b7280;
-  --line: #d7dbe2;
-  --acc: #1d4ed8;
-  --goal: #dc2626;
-  --save: #2563eb;
+  --ink: 232 238 248;      /* основной текст            #e8eef8 */
+  --mut: 133 150 176;      /* вторичный текст           #8596b0 */
+  --line: 148 163 184;     /* границы (низкая альфа в классах) */
+  --acc: 82 156 255;       /* акцент — ледяной синий    #529cff */
+  --goal: 248 113 113;     /* гол                       #f87171 */
+  --save: 96 165 250;      /* сейв                      #60a5fa */
+  --ok: 74 222 128;        /* успех                     #4ade80 */
+  --card: 18 26 41;        /* панель                    #121a29 */
+  --panel2: 30 41 62;      /* инпуты / приподнятое      #1e293e */
 }
 
-body { margin: 0; }
+html { color-scheme: dark; }
 
+body {
+  margin: 0;
+  background: #0a0f1c;
+  background-image:
+    radial-gradient(1200px 500px at 15% -5%, rgba(82,156,255,0.07), transparent 60%),
+    radial-gradient(900px 420px at 85% -8%, rgba(56,189,248,0.05), transparent 60%);
+  background-attachment: fixed;
+  color: rgb(var(--ink));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Ринк: лёд светлый на тёмной панели ── */
 .rink-zone { fill: rgba(0,0,0,0); cursor: pointer; transition: fill 0.15s; }
-.rink-zone:hover { fill: rgba(29,78,216,0.12); }
-.rink-zone.flash { fill: rgba(5,150,105,0.3); }
+.rink-zone:hover { fill: rgba(37,99,235,0.14); }
+.rink-zone.flash { fill: rgba(5,150,105,0.35); }
 
-/* Lock state: zones become non-interactive */
 .rink-locked .rink-zone { pointer-events: none; cursor: not-allowed; }
 .rink-locked .rink-zone:hover { fill: rgba(0,0,0,0); }
 
-.card { @apply bg-white border border-line rounded-xl shadow-sm; }
-.tab-active { background: #111827; color: white; border-color: #111827; }
-.btn-primary { @apply bg-acc text-white border-acc hover:bg-blue-800; }
-.btn-danger { @apply text-goal border-line hover:bg-red-50; }
+/* ── Базовые компоненты ── */
+.card {
+  background: rgb(var(--card) / 0.82);
+  border: 1px solid rgb(var(--line) / 0.14);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(2,6,17,0.35);
+  backdrop-filter: blur(6px);
+}
+.tab-active { background: rgb(var(--acc)); color: #0a0f1c; border-color: transparent; }
+.btn-primary { @apply bg-acc text-[#0a0f1c] border-transparent hover:brightness-110; }
+.btn-danger { @apply text-goal border-line/20 hover:bg-goal/10; }
+
+/* Инпуты и селекты в тёмной теме */
+input, select {
+  color: rgb(var(--ink));
+}
+input::placeholder { color: rgb(var(--mut) / 0.6); }
+select option { background: rgb(var(--panel2)); color: rgb(var(--ink)); }
 
 /* Плавное появление строк с каскадной задержкой: style="--i: n" */
 @keyframes dash-fade-in {
@@ -36,6 +65,34 @@ body { margin: 0; }
 .fade-row { animation: dash-fade-in 0.35s cubic-bezier(.4,0,.2,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
 
 /* Каскад фокуса: при наведении на таблицу соседние строки гаснут */
-.focus-cascade tbody:hover tr { opacity: 0.22; }
+.focus-cascade tbody:hover tr { opacity: 0.25; }
 .focus-cascade tbody tr:hover { opacity: 1; }
 .focus-cascade tbody tr { transition: opacity 0.15s ease; }
+
+/* Тонкие скроллбары под тему */
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--panel2)) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgb(var(--panel2)); border-radius: 8px; }
+
+/* ── Печатный отчёт (Season → Report / PDF) — светлая тема ── */
+@page { margin: 12mm; }
+
+@media print {
+  body.report-mode {
+    --ink: 22 24 29;
+    --mut: 107 114 128;
+    --line: 190 195 205;
+    --card: 255 255 255;
+    --panel2: 243 244 246;
+    background: #fff !important;
+    color: #16181d;
+  }
+  body.report-mode header,
+  body.report-mode footer,
+  body.report-mode .data-panel-wrap { display: none !important; }
+  body.report-mode .page-wrap > *:not(.page-content) { display: none !important; }
+  body.report-mode .page-content > div > *:not(.print-report) { display: none !important; }
+  body.report-mode .print-report { display: block !important; }
+  body.report-mode .card { box-shadow: none !important; border-color: #bbb !important; border-radius: 6px !important; backdrop-filter: none !important; }
+  .print-report .pb-avoid { break-inside: avoid; page-break-inside: avoid; }
+}

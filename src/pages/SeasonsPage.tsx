@@ -4,15 +4,15 @@ import { aggEvents, totals, selTotals, gaa, fmtDate } from '../utils/stats';
 
 // Единый с дашбордом язык: коралл — акцент, 7 ступеней без серого
 const ACCENT = 'rgb(255,130,100)';
-const INK = '#16181d';
+const INK = '#e8eef8';
 const svColor = (v: number) =>
-  v >= 95 ? '#15803d' :
-  v >= 92 ? '#16a34a' :
-  v >= 89 ? '#a16207' :
-  v >= 86 ? '#d97706' :
-  v >= 83 ? '#ea580c' :
-  v >= 80 ? '#c2410c' :
-  '#dc2626';
+  v >= 95 ? '#4ade80' :
+  v >= 92 ? '#a3e635' :
+  v >= 89 ? '#fde047' :
+  v >= 86 ? '#fbbf24' :
+  v >= 83 ? '#fb923c' :
+  v >= 80 ? '#f87171' :
+  '#f87171';
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 interface SeasonAgg {
@@ -173,7 +173,7 @@ export default function SeasonsPage() {
           </button>
         ))}
         <button onClick={exportCsv} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Export CSV</button>
-        <button onClick={printReport} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50 transition">🖨 Report / PDF</button>
+        <button onClick={printReport} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-panel2/40 transition">🖨 Report / PDF</button>
       </div>
 
       {!withData.length && (
@@ -242,7 +242,7 @@ export default function SeasonsPage() {
                         <td className="py-2 px-2 text-center tabular-nums">{r.games || '—'}</td>
                         <td className="py-2 px-2 text-center tabular-nums">{r.s || '—'}</td>
                         <td className="py-2 px-2 text-center tabular-nums">{r.s ? r.s - r.g : '—'}</td>
-                        <td className="py-2 px-2 text-center tabular-nums font-bold" style={{ color: r.g ? '#dc2626' : undefined }}>{r.g || '—'}</td>
+                        <td className="py-2 px-2 text-center tabular-nums font-bold" style={{ color: r.g ? '#f87171' : undefined }}>{r.g || '—'}</td>
                         <td className="py-2 px-2 text-center tabular-nums">
                           {v !== null
                             ? <span className="inline-flex items-center justify-center min-w-[3.5rem] h-7 px-2 rounded-md text-xs font-bold" style={{ background: `${svColor(v)}22`, color: svColor(v), boxShadow: `inset 0 0 0 1px ${svColor(v)}55` }}>{v.toFixed(1)}</span>
@@ -267,7 +267,7 @@ export default function SeasonsPage() {
                       <td className="py-2 px-2 text-center tabular-nums">{total.games}</td>
                       <td className="py-2 px-2 text-center tabular-nums">{total.s}</td>
                       <td className="py-2 px-2 text-center tabular-nums">{total.s - total.g}</td>
-                      <td className="py-2 px-2 text-center tabular-nums" style={{ color: total.g ? '#dc2626' : undefined }}>{total.g || '—'}</td>
+                      <td className="py-2 px-2 text-center tabular-nums" style={{ color: total.g ? '#f87171' : undefined }}>{total.g || '—'}</td>
                       <td className="py-2 px-2 text-center tabular-nums font-bold" style={{ color: sv(total) !== null ? svColor(sv(total)!) : undefined }}>{sv(total)!.toFixed(1)}</td>
                       <td className="py-2 px-2 text-center tabular-nums font-bold" style={{ color: dsv(total) !== null ? svColor(dsv(total)!) : undefined }}>{dsv(total)!.toFixed(1)}</td>
                       <td className="py-2 px-2 text-center tabular-nums">{gaa(total.g, total.toi, total.games)}</td>
@@ -325,7 +325,7 @@ export default function SeasonsPage() {
                       <td className="py-1 text-right tabular-nums">{r.games}</td>
                       <td className="py-1 text-right tabular-nums">{r.s}</td>
                       <td className="py-1 text-right tabular-nums">{r.s - r.g}</td>
-                      <td className="py-1 text-right tabular-nums font-bold" style={{ color: r.g ? '#dc2626' : undefined }}>{r.g || '—'}</td>
+                      <td className="py-1 text-right tabular-nums font-bold" style={{ color: r.g ? '#f87171' : undefined }}>{r.g || '—'}</td>
                       <td className="py-1 text-right tabular-nums font-bold" style={{ color: v !== null ? svColor(v!) : undefined }}>{v !== null ? v.toFixed(1) : '—'}</td>
                       <td className="py-1 text-right tabular-nums font-bold" style={{ color: dv !== null ? svColor(dv!) : undefined }}>{dv !== null ? dv.toFixed(1) : '—'}</td>
                       <td className="py-1 text-right tabular-nums">{gaa(r.g, r.toi, r.games)}</td>
@@ -339,7 +339,7 @@ export default function SeasonsPage() {
                   <td className="py-1 text-right tabular-nums">{total.games}</td>
                   <td className="py-1 text-right tabular-nums">{total.s}</td>
                   <td className="py-1 text-right tabular-nums">{total.s - total.g}</td>
-                  <td className="py-1 text-right tabular-nums" style={{ color: total.g ? '#dc2626' : undefined }}>{total.g}</td>
+                  <td className="py-1 text-right tabular-nums" style={{ color: total.g ? '#f87171' : undefined }}>{total.g}</td>
                   <td className="py-1 text-right tabular-nums font-bold" style={{ color: sv(total) !== null ? svColor(sv(total)!) : undefined }}>{sv(total)!.toFixed(1)}</td>
                   <td className="py-1 text-right tabular-nums font-bold" style={{ color: dsv(total) !== null ? svColor(dsv(total)!) : undefined }}>{dsv(total)!.toFixed(1)}</td>
                   <td className="py-1 text-right tabular-nums">{gaa(total.g, total.toi, total.games)}</td>

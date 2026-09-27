@@ -21,22 +21,22 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm bg-white rounded-2xl shadow-lg border border-slate-200 p-8"
+        className="w-full max-w-sm bg-panel2/70 rounded-2xl shadow-lg border border-line/20 p-8"
       >
         <div className="flex items-center gap-3 mb-1">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="2" y="7" width="20" height="13" rx="2" stroke="#0f172a" strokeWidth="1.6" />
-            <path d="M8 7V5a4 4 0 0 1 8 0v2" stroke="#0f172a" strokeWidth="1.6" />
-            <circle cx="12" cy="13.5" r="1.6" fill="#0f172a" />
+            <rect x="2" y="7" width="20" height="13" rx="2" stroke="rgb(var(--acc))" strokeWidth="1.6" />
+            <path d="M8 7V5a4 4 0 0 1 8 0v2" stroke="rgb(var(--acc))" strokeWidth="1.6" />
+            <circle cx="12" cy="13.5" r="1.6" fill="rgb(var(--acc))" />
           </svg>
-          <h1 className="text-xl font-bold text-slate-900">Goalie Stats Pro</h1>
+          <h1 className="text-xl font-bold text-ink">Goalie Stats Pro</h1>
         </div>
-        <p className="text-sm text-slate-500 mb-6">Доступ ограничен. Введите пароль.</p>
+        <p className="text-sm text-mut mb-6">Доступ ограничен. Введите пароль.</p>
 
-        <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="lock-password">
+        <label className="block text-sm font-medium text-ink mb-1" htmlFor="lock-password">
           Пароль
         </label>
         <input
@@ -46,10 +46,10 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
           autoComplete="current-password"
           value={password}
           onChange={e => { setPassword(e.target.value); setError(false); }}
-          className={`w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 ${
+          className={`w-full rounded-lg border px-3 py-2 text-ink outline-none focus:ring-2 ${
             error
-              ? 'border-red-400 focus:ring-red-200'
-              : 'border-slate-300 focus:border-slate-400 focus:ring-slate-200'
+              ? 'border-goal/50 focus:ring-goal/30'
+              : 'border-line/25 focus:border-acc focus:ring-acc/30'
           }`}
         />
         {error && (
@@ -59,7 +59,7 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
         <button
           type="submit"
           disabled={busy || !password}
-          className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-white font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-5 w-full rounded-lg bg-acc px-4 py-2.5 text-[#0a0f1c] font-medium hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? 'Проверка…' : 'Войти'}
         </button>

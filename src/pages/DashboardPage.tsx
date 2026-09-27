@@ -5,26 +5,26 @@ import { pct, gaa, fmtDate } from '../utils/stats';
 
 // Единственный акцент: коралл — интерактив и худшая зона
 const ACCENT = 'rgb(255,130,100)';
-const INK = '#16181d';
+const INK = '#e8eef8';
 
 // 7 ступеней: красный → оранжевый → янтарь → жёлтый → зелёный (всё яркое, без серого)
 const svColor = (v: number) =>
-  v >= 95 ? '#15803d' : // green-700
-  v >= 92 ? '#16a34a' : // green-600
-  v >= 89 ? '#a16207' : // yellow-700
-  v >= 86 ? '#d97706' : // amber-600
-  v >= 83 ? '#ea580c' : // orange-600
-  v >= 80 ? '#c2410c' : // orange-700
-  '#dc2626';           // red-600
+  v >= 95 ? '#4ade80' : // green-700
+  v >= 92 ? '#a3e635' : // green-600
+  v >= 89 ? '#fde047' : // yellow-700
+  v >= 86 ? '#fbbf24' : // amber-600
+  v >= 83 ? '#fb923c' : // orange-600
+  v >= 80 ? '#f87171' : // orange-700
+  '#ef4444';           // red-600
 
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 // Цвет количества голов за период: 0 — зелёный, дальше теплее
 const gaColor = (n: number) =>
-  n === 0 ? '#15803d' :
-  n === 1 ? '#d97706' :
-  n === 2 ? '#ea580c' :
-  '#dc2626';
+  n === 0 ? '#4ade80' :
+  n === 1 ? '#fbbf24' :
+  n === 2 ? '#fb923c' :
+  '#f87171';
 
 export default function DashboardPage() {
   const games = useStore(s => s.games);
@@ -237,8 +237,8 @@ export default function DashboardPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       {(p as any).photo
-                        ? <img src={(p as any).photo} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-200 shrink-0" />
-                        : <span className="w-10 h-10 rounded-full bg-slate-100 border border-line shrink-0" />}
+                        ? <img src={(p as any).photo} alt="" className="w-10 h-10 rounded-full object-cover bg-panel2 shrink-0" />
+                        : <span className="w-10 h-10 rounded-full bg-panel2 border border-line shrink-0" />}
                       <div className="min-w-0">
                         <div className="font-bold text-sm truncate">{p.name}</div>
                         <div className={MICRO}>Record {p.w + p.l + p.t > 0 ? `${p.w}–${p.l}–${p.t}` : '—'}</div>
@@ -291,7 +291,7 @@ export default function DashboardPage() {
                     <tr key={row.id} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri + 2, transition: 'opacity 0.15s' }}>
                       <td className="py-2 pr-3 font-medium whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          {gp?.photo && <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" />}
+                          {gp?.photo && <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2" />}
                           {row.name}
                         </div>
                       </td>
@@ -364,7 +364,7 @@ export default function DashboardPage() {
                 return (
                   <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
                     <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
-                      {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
+                      {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2 shrink-0" />}
                       <span className="font-bold text-sm truncate">{row.name}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -410,7 +410,7 @@ export default function DashboardPage() {
                       <span
                         key={i}
                         className="w-8 h-8 rounded-md inline-flex items-center justify-center text-[10px] font-black text-white tabular-nums"
-                        style={{ background: g.sv === null ? '#9ca3af' : svColor(g.sv) }}
+                        style={{ background: g.sv === null ? '#8596b0' : svColor(g.sv) }}
                         title={`${fmtDate(g.date)}${g.opponent ? ' vs ' + g.opponent : ''}: ${g.shots - g.goals}/${g.shots} — SV ${g.sv?.toFixed(1) ?? '—'}%`}
                       >
                         {g.sv === null ? '—' : g.sv.toFixed(0)}
