@@ -34,8 +34,8 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
           </svg>
           <h1 className="text-xl font-bold text-ink">Goalie Stats Pro</h1>
         </div>
-        <p className="text-sm text-mut mb-6">Доступ ограничен. Введите пароль.</p>
-
+        <p className="text-sm text-mut mb-2">Доступ ограничен. Введите пароль.</p>
+        <p className="text-xs text-mut/70 mb-6">Пароль администратора — полный доступ, пароль зрителя — только просмотр.</p>
         <label className="block text-sm font-medium text-ink mb-1" htmlFor="lock-password">
           Пароль
         </label>

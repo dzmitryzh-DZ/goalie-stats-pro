@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import SeasonsPage from './pages/SeasonsPage';
 import DataPanel from './components/DataPanel';
 import { fmtDate } from './utils/stats';
+import { isAdmin } from './utils/auth';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -67,6 +68,7 @@ export default function App() {
   const setActiveSeason = useStore(s => s.setActiveSeason);
   const [dataOpen, setDataOpen] = useState(false);
   const [showSeasonModal, setShowSeasonModal] = useState(false);
+  const admin = isAdmin(); // viewer — только просмотр, все элементы редактирования скрыты
 
   // New game modal
   const [showNewModal, setShowNewModal] = useState(false);
@@ -82,9 +84,10 @@ export default function App() {
   const seasonTeam = activeSeason?.teamId ? teams.find(t => t.id === activeSeason.teamId) : null;
   const teamLogo = seasonTeam?.logo || null;
 
-  // Drag & drop .json import
+  // Drag & drop .json import (только для администратора)
   const handleDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
+    if (!admin) return;
     const file = e.dataTransfer?.files?.[0];
     if (!file || !/\.json$/i.test(file.name)) return;
     const reader = new FileReader();
@@ -98,7 +101,7 @@ export default function App() {
       } catch { alert('❌ Could not parse dropped JSON file'); }
     };
     reader.readAsText(file);
-  }, [mergeData]);
+  }, [mergeData, admin]);
 
   useEffect(() => {
     const prevent = (e: DragEvent) => e.preventDefault();
@@ -139,6 +142,11 @@ export default function App() {
           <div className="text-[10px] text-mut tracking-[0.18em] uppercase hidden sm:block">Shot chart zone analysis</div>
         </div>
         <div className="flex-1" />
+        {!admin && (
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] px-2 py-1 rounded-full bg-acc/15 text-acc" title="Read-only access">
+            👁 View only
+          </span>
+        )}
         <select
           value={activeSeasonId || ''}
           onChange={e => setActiveSeason(e.target.value)}
@@ -147,7 +155,7 @@ export default function App() {
         >
           {seasons.map(s => <option key={s.id} value={s.id}>🏆 {s.name}</option>)}
         </select>
-        <button onClick={() => setShowSeasonModal(true)} className={BTN_GHOST} title="Manage seasons & teams">⚙</button>
+        {admin && <button onClick={() => setShowSeasonModal(true)} className={BTN_GHOST} title="Manage seasons & teams">⚙</button>}
         <button onClick={toggleMirror} className={`px-2 py-1 rounded-lg text-[11px] font-semibold border transition ${mirror ? 'bg-acc text-[#0a0f1c] border-transparent' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'}`}>⇄ {mirror ? 'Left' : 'Right'}</button>
       </header>
 
@@ -160,9 +168,9 @@ export default function App() {
               <option key={g.id} value={g.id}>{fmtDate(g.date)}{g.opponent ? ` · ${g.opponent}` : ''}{g.result ? ` · ${g.result.gf}:${g.result.ga}` : ''}</option>
             ))}
           </select>
-          <button onClick={openEditModal} disabled={!activeId} className={BTN_GHOST} title="Edit date / opponent of the selected game">✎ Edit</button>
-          <button onClick={openNewModal} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold transition">+ New</button>
-          <button onClick={() => activeId && confirm('Delete this game?') && deleteGame(activeId)} className="btn-danger px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Delete</button>
+          {admin && <button onClick={openEditModal} disabled={!activeId} className={BTN_GHOST} title="Edit date / opponent of the selected game">✎ Edit</button>}
+          {admin && <button onClick={openNewModal} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold transition">+ New</button>}
+          {admin && <button onClick={() => activeId && confirm('Delete this game?') && deleteGame(activeId)} className="btn-danger px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Delete</button>}
         </div>
 
         {/* New Game Modal */}
@@ -241,7 +249,8 @@ export default function App() {
         </main>
       </div>
 
-      {/* Collapsible Data Panel */}
+      {/* Collapsible Data Panel — только администратор */}
+      {admin && (
       <div className="max-w-7xl mx-auto px-3 pb-3 data-panel-wrap">
         <button onClick={() => setDataOpen(!dataOpen)} className="w-full card px-3 py-2 flex items-center justify-between text-[10px] uppercase tracking-[0.14em] font-semibold text-mut hover:text-ink transition">
           <span>Data Management</span>
@@ -249,9 +258,12 @@ export default function App() {
         </button>
         {dataOpen && <div className="mt-2"><DataPanel /></div>}
       </div>
+      )}
 
       <footer className="text-center text-[10px] text-mut/70 py-6 tracking-wide">
-        Goalie Stats Pro · Auto-saved in browser · Drop .json to import
+        {admin
+          ? 'Goalie Stats Pro · Auto-saved in browser · Drop .json to import'
+          : 'Goalie Stats Pro · Read-only mode'}
       </footer>
     </div>
   );
