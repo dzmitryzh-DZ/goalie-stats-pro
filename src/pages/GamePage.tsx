@@ -3,6 +3,7 @@ import { useStore, useActiveGame } from '../store';
 import { ZONES, PERIODS, STRENGTHS, TARGETS, PLAYS, ZONE_PATHS, LABEL_POS, STR_GRP_COLORS } from '../types';
 import type { Event } from '../types';
 import { aggEvents, totals, selTotals, pct, zoneName, normalizeTime, gaa, fmtDate } from '../utils/stats';
+import { isAdmin } from '../utils/auth';
 
 // Коралл — сигнальный акцент (худшая зона), шкала SV% — фирменная
 const ACCENT = 'rgb(255,130,100)';
@@ -107,6 +108,9 @@ export default function GamePage() {
   const mirror = useStore(s => s.mirror);
   const locked = useStore(s => s.locked);
   const toggleLocked = useStore(s => s.toggleLocked);
+  // viewer: принудительный read-only — все мутации отключены, effLocked дублирует locked
+  const admin = isAdmin();
+  const effLocked = locked || !admin;
 
   const [mode, setMode] = useState<'save' | 'goal'>('save');
   const [timeInp, setTimeInp] = useState('');
@@ -137,7 +141,7 @@ export default function GamePage() {
   const st = selTotals(m);
 
   const handleZoneClick = (z: number) => {
-    if (locked) return;
+    if (effLocked) return;
     const ev: Omit<Event, 'ts'> = {
       z, t: mode, g: game.goalieId, p: game.period || '1',
       time: normalizeTime(timeInp),
@@ -200,66 +204,70 @@ export default function GamePage() {
           {/* Goalie selector + photo + management */}
           <span className={MICRO}>Goalie</span>
           {(() => { const gp = goalies.find(p => p.id === game.goalieId); return gp?.photo ? <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2" /> : null; })()}
-          <select value={game.goalieId} onChange={e => setGameGoalie(game.id, e.target.value)} className="bg-panel2/70 border border-line/20 rounded-lg px-2 py-1 text-sm text-ink focus:outline-none focus:border-acc">
+          <select value={game.goalieId} onChange={e => setGameGoalie(game.id, e.target.value)} disabled={!admin} className="bg-panel2/70 border border-line/20 rounded-lg px-2 py-1 text-sm text-ink focus:outline-none focus:border-acc disabled:opacity-60 disabled:cursor-default">
             {goalies.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <div className="flex gap-1">
+          {admin && <div className="flex gap-1">
             <button onClick={() => photoRef.current?.click()} className="px-1.5 py-1 rounded border border-line/20 text-xs text-mut hover:text-ink hover:bg-white/5 transition" title="Upload photo">📷</button>
             {goalies.find(p => p.id === game.goalieId)?.photo && <button onClick={() => setGoaliePhoto(game.goalieId, null)} className="px-1.5 py-1 rounded border border-goal/30 text-xs text-goal hover:bg-goal/10 transition" title="Remove photo">✕</button>}
             <button onClick={() => { const n = prompt('Goalie name:'); if (n?.trim()) addGoalie(n.trim()); }} className="px-1.5 py-1 rounded border border-line/20 text-xs text-mut hover:text-ink hover:bg-white/5 transition" title="Add">+</button>
             <button onClick={() => { const n = prompt('New name:', goalies.find(p => p.id === game.goalieId)?.name); if (n?.trim()) renameGoalie(game.goalieId, n.trim()); }} className="px-1.5 py-1 rounded border border-line/20 text-xs text-mut hover:text-ink hover:bg-white/5 transition" title="Rename">✎</button>
             <button onClick={() => { if (goalies.length <= 1) { alert('Cannot delete the only goalie.'); return; } if (confirm(`Delete ${goalies.find(p => p.id === game.goalieId)?.name}?`)) deleteGoalie(game.goalieId); }} className="px-1.5 py-1 rounded border border-goal/30 text-xs text-goal hover:bg-goal/10 transition" title="Delete">✕</button>
-          </div>
-          <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e => {
+          </div>}
+          {admin && <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e => {
             const file = e.target.files?.[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = () => { const img = new Image(); img.onload = () => { const k = Math.min(1, 200 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k)); c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height); setGoaliePhoto(game.goalieId, c.toDataURL('image/jpeg', 0.85)); }; img.src = reader.result as string; };
             reader.readAsDataURL(file); e.target.value = '';
-          }} />
+          }} />}
 
           <span className="w-px h-5 bg-line/15" />
 
-          {/* Mode toggle */}
-          <span className={MICRO}>Mode</span>
-          <div className="flex rounded-full border border-line/20 p-0.5 gap-0.5">
-            <button onClick={() => setMode('save')} className={`${CHIP} border-transparent ${mode === 'save' ? 'bg-save text-[#0a0f1c]' : 'text-mut hover:text-ink'}`}>Shot</button>
-            <button onClick={() => setMode('goal')} className={`${CHIP} border-transparent ${mode === 'goal' ? 'bg-goal text-[#0a0f1c]' : 'text-mut hover:text-ink'}`}>Goal</button>
-          </div>
+          {/* Mode toggle — только для записи событий, зрителю не нужен */}
+          {admin && <>
+            <span className={MICRO}>Mode</span>
+            <div className="flex rounded-full border border-line/20 p-0.5 gap-0.5">
+              <button onClick={() => setMode('save')} className={`${CHIP} border-transparent ${mode === 'save' ? 'bg-save text-[#0a0f1c]' : 'text-mut hover:text-ink'}`}>Shot</button>
+              <button onClick={() => setMode('goal')} className={`${CHIP} border-transparent ${mode === 'goal' ? 'bg-goal text-[#0a0f1c]' : 'text-mut hover:text-ink'}`}>Goal</button>
+            </div>
 
-          <span className="w-px h-5 bg-line/15" />
+            <span className="w-px h-5 bg-line/15" />
+          </>}
 
           {/* Period chips */}
           <span className={MICRO}>Period</span>
           <div className="flex gap-0.5">
             {PERIODS.map(p => (
-              <button key={p} onClick={() => setGamePeriod(game.id, p)} className={`w-9 h-9 lg:w-7 lg:h-7 rounded text-xs font-bold border transition ${game.period === p ? 'bg-acc text-[#0a0f1c] border-transparent' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'}`}>{p}</button>
+              <button key={p} onClick={() => admin && setGamePeriod(game.id, p)} disabled={!admin} className={`w-9 h-9 lg:w-7 lg:h-7 rounded text-xs font-bold border transition ${game.period === p ? 'bg-acc text-[#0a0f1c] border-transparent' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'} disabled:opacity-60 disabled:cursor-default`}>{p}</button>
             ))}
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          {admin && <div className="flex items-center gap-2 ml-auto">
             <input type="text" placeholder="mm:ss" value={timeInp} onChange={e => setTimeInp(e.target.value)} className="bg-panel2/70 border border-line/20 rounded-lg px-2 py-1 text-xs w-16 text-ink focus:outline-none focus:border-acc" />
             <button onClick={toggleLocked} className={`px-2.5 py-1 rounded border text-xs font-semibold transition ${locked ? 'bg-goal/10 border-goal/40 text-goal hover:bg-goal/20' : 'bg-ok/10 border-ok/40 text-ok hover:bg-ok/20'}`} title={locked ? 'Unlock zone editing to record shots' : 'Lock zone editing to prevent accidental clicks'}>{locked ? '🔒 Locked' : '🔓 Live'}</button>
             <button onClick={() => undoLastEvent(game.id)} disabled={!game.events.length} className="px-2 py-1 rounded border border-line/20 text-xs text-mut hover:text-ink hover:bg-white/5 transition disabled:opacity-40" title="Undo (last event)">↩</button>
-          </div>
+          </div>}
         </div>
 
         {/* Вторая строка: внеопасные зоны + фильтр статистики + хоткеи */}
         <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center pt-2 border-t border-line/10">
-          <span className={MICRO}>Non-danger</span>
-          <button onClick={() => handleZoneClick(8)} className="px-2 py-0.5 rounded border border-line/20 text-xs font-semibold text-mut hover:text-ink hover:bg-white/5 transition">8 · Middle</button>
-          <button onClick={() => handleZoneClick(9)} className="px-2 py-0.5 rounded border border-line/20 text-xs font-semibold text-mut hover:text-ink hover:bg-white/5 transition">9 · Far</button>
-          <span className="w-px h-4 bg-line/15" />
+          {admin && <>
+            <span className={MICRO}>Non-danger</span>
+            <button onClick={() => handleZoneClick(8)} className="px-2 py-0.5 rounded border border-line/20 text-xs font-semibold text-mut hover:text-ink hover:bg-white/5 transition">8 · Middle</button>
+            <button onClick={() => handleZoneClick(9)} className="px-2 py-0.5 rounded border border-line/20 text-xs font-semibold text-mut hover:text-ink hover:bg-white/5 transition">9 · Far</button>
+            <span className="w-px h-4 bg-line/15" />
+          </>}
           <span className={MICRO}>Filter stats</span>
           <select value={goalieFilter} onChange={e => setGoalieFilter(e.target.value)} className="bg-panel2/70 border border-line/20 rounded-lg px-2 py-1 text-xs text-ink focus:outline-none focus:border-acc">
             <option value="">all goalies</option>
             {goalies.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           {goalieFilter && <span className="text-[10px] font-semibold" style={{ color: ACCENT }}>Showing {filteredEvents.length} of {game.events.length} events</span>}
-          <span className="text-[10px] text-mut/70 ml-auto hidden lg:inline">Z1–7 danger · Z8–10 total · <kbd className="bg-panel2 px-1 rounded">Z</kbd> mode · <kbd className="bg-panel2 px-1 rounded">Esc</kbd> exit edit</span>
+          {admin && <span className="text-[10px] text-mut/70 ml-auto hidden lg:inline">Z1–7 danger · Z8–10 total · <kbd className="bg-panel2 px-1 rounded">Z</kbd> mode · <kbd className="bg-panel2 px-1 rounded">Esc</kbd> exit edit</span>}
         </div>
 
         {/* Goal attributes panel */}
-        {mode === 'goal' && (
+        {admin && mode === 'goal' && (
           <div className="bg-panel2/40 border border-dashed border-line/20 rounded-xl p-2.5 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="text-[10px] uppercase tracking-[0.14em] text-mut font-semibold">Strength</div>
             <div className="flex flex-wrap gap-1">
@@ -300,13 +308,15 @@ export default function GamePage() {
       <div className="grid lg:grid-cols-[1fr_340px] gap-4 items-start">
         {/* Rink */}
         <div className="card p-3 relative lg:sticky lg:top-[64px]">
-          {locked && (
+          {effLocked && (
             <div className="absolute top-3 left-3 z-10 bg-black/70 text-white px-3 py-1 rounded-md text-xs font-semibold pointer-events-none select-none backdrop-blur-sm">
-              🔒 <span className="sm:hidden">Locked</span><span className="hidden sm:inline">Editing locked — unlock to record shots</span>
+              {admin
+                ? <>🔒 <span className="sm:hidden">Locked</span><span className="hidden sm:inline">Editing locked — unlock to record shots</span></>
+                : <>👁 <span className="sm:hidden">View only</span><span className="hidden sm:inline">View only — data editing is disabled</span></>}
             </div>
           )}
           <div className="overflow-x-auto -m-1 p-1">
-          <svg viewBox="0 0 1747 2400" className={`min-w-[620px] lg:min-w-0 w-full h-auto block touch-manipulation lg:max-h-[78vh] ${locked ? 'rink-locked' : ''}`} style={{ filter: 'drop-shadow(0 0 24px rgba(82,156,255,0.10))' }}>
+          <svg viewBox="0 0 1747 2400" className={`min-w-[620px] lg:min-w-0 w-full h-auto block touch-manipulation lg:max-h-[78vh] ${effLocked ? 'rink-locked' : ''}`} style={{ filter: 'drop-shadow(0 0 24px rgba(82,156,255,0.10))' }}>
             <g transform={transform}>
               <path d="M0 40 H1180 Q1693 40 1693 520 V1880 Q1693 2360 1180 2360 H0 Z" fill="#f4f7fa" stroke="#c9ccd1" strokeWidth="26"/>
               <rect x="875" y="995" width="555" height="415" fill="#e4e9ee"/>
@@ -353,7 +363,7 @@ export default function GamePage() {
             <h3 className={MICRO}>Event log</h3>
             <div className="flex items-center gap-2">
               <span className="text-xs text-mut tabular-nums">{filteredEvents.length}{goalieFilter ? ' (filtered)' : ''}</span>
-              <button onClick={() => setEditMode(!editMode)} className={`text-xs px-2 py-1 rounded border transition ${editMode ? 'bg-acc text-[#0a0f1c] border-transparent font-bold' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'}`}>{editMode ? '💾 Save' : '✎ Edit'}</button>
+              {admin && <button onClick={() => setEditMode(!editMode)} className={`text-xs px-2 py-1 rounded border transition ${editMode ? 'bg-acc text-[#0a0f1c] border-transparent font-bold' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'}`}>{editMode ? '💾 Save' : '✎ Edit'}</button>}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
@@ -508,7 +518,7 @@ export default function GamePage() {
             <tbody>{(() => {
               const ids = new Set<string>(); game.events.forEach(e => ids.add(e.g)); if (game.goalieId) ids.add(game.goalieId);
               return Array.from(ids).map((gid, ri) => { let s = 0, gg = 0; game.events.forEach(e => { if (e.g === gid) { s++; if (e.t === 'goal') gg++; } }); const toi = (game.toi && +game.toi[gid]) || 0; const gsv = s > 0 ? 100 * (s - gg) / s : null;
-                return (<tr key={gid} className="border-b border-line/10 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}><td className="py-2 pr-2 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{(() => { const gp = goalies.find(p => p.id === gid); return gp?.photo ? <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2" /> : null; })()}{goalies.find(p => p.id === gid)?.name || '—'}</div></td><td className="py-2 px-2 text-right tabular-nums">{s}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gg ? '#f87171' : undefined }}>{gg || '—'}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(s - gg, s)}</td><td className="py-2 px-2 text-right"><input type="number" min="0" max="300" step="0.5" value={toi || ''} onChange={e => setGameToi(game.id, gid, parseFloat(e.target.value) || 0)} placeholder="60" className="bg-panel2/70 border border-line/20 rounded px-1 py-0.5 w-12 text-right text-xs text-ink" /></td><td className="py-2 px-2 text-right tabular-nums">{gaa(gg, toi, 1)}</td></tr>);
+                return (<tr key={gid} className="border-b border-line/10 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}><td className="py-2 pr-2 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{(() => { const gp = goalies.find(p => p.id === gid); return gp?.photo ? <img src={gp.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2" /> : null; })()}{goalies.find(p => p.id === gid)?.name || '—'}</div></td><td className="py-2 px-2 text-right tabular-nums">{s}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gg ? '#f87171' : undefined }}>{gg || '—'}</td><td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(s - gg, s)}</td><td className="py-2 px-2 text-right">{admin ? <input type="number" min="0" max="300" step="0.5" value={toi || ''} onChange={e => setGameToi(game.id, gid, parseFloat(e.target.value) || 0)} placeholder="60" className="bg-panel2/70 border border-line/20 rounded px-1 py-0.5 w-12 text-right text-xs text-ink" /> : <span className="text-xs tabular-nums text-mut">{toi || '—'}</span>}</td><td className="py-2 px-2 text-right tabular-nums">{gaa(gg, toi, 1)}</td></tr>);
               });
             })()}</tbody>
           </table>
@@ -519,10 +529,16 @@ export default function GamePage() {
           GF input MUST have id="resGf": GA/dec handlers read it via getElementById. */}
       <div className="card px-3 py-2.5 flex flex-wrap gap-2 items-center" key={game.id}>
         <span className={MICRO + ' mr-1'}>Result</span>
-        <input id="resGf" type="number" min="0" max="30" placeholder="GF" defaultValue={game.result?.gf ?? ''} onBlur={e => updateGameResult(game.id, +e.target.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 w-14 text-center text-sm font-bold tabular-nums text-ink focus:outline-none focus:border-acc" />
-        <span className="text-mut text-xs">:</span>
-        <input id="resGa" type="number" min="0" max="30" placeholder="GA" defaultValue={game.result?.ga ?? ''} onBlur={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +e.target.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 w-14 text-center text-sm font-bold tabular-nums text-ink focus:outline-none focus:border-acc" />
-        <select id="resDec" defaultValue={game.result?.dec || ''} onChange={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, e.target.value)} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-acc"><option value="">—</option><option value="REG">REG</option><option value="OT">OT</option><option value="SO">SO</option></select>
+        {admin ? <>
+          <input id="resGf" type="number" min="0" max="30" placeholder="GF" defaultValue={game.result?.gf ?? ''} onBlur={e => updateGameResult(game.id, +e.target.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 w-14 text-center text-sm font-bold tabular-nums text-ink focus:outline-none focus:border-acc" />
+          <span className="text-mut text-xs">:</span>
+          <input id="resGa" type="number" min="0" max="30" placeholder="GA" defaultValue={game.result?.ga ?? ''} onBlur={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +e.target.value || 0, (document.getElementById('resDec') as HTMLSelectElement)?.value || '')} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 w-14 text-center text-sm font-bold tabular-nums text-ink focus:outline-none focus:border-acc" />
+          <select id="resDec" defaultValue={game.result?.dec || ''} onChange={e => updateGameResult(game.id, +(document.getElementById('resGf') as HTMLInputElement)?.value || 0, +(document.getElementById('resGa') as HTMLInputElement)?.value || 0, e.target.value)} className="bg-panel2/70 border border-line/20 rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-acc"><option value="">—</option><option value="REG">REG</option><option value="OT">OT</option><option value="SO">SO</option></select>
+        </> : (
+          <span className="text-sm font-bold tabular-nums text-ink">
+            {game.result ? `${game.result.gf}:${game.result.ga}${game.result.dec ? ` · ${game.result.dec}` : ''}` : <span className="text-mut">—</span>}
+          </span>
+        )}
         <span className="text-[10px] text-mut ml-auto">{fmtDate(game.date)}{game.opponent ? ` · vs ${game.opponent}` : ''}</span>
       </div>
     </div>
