@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { checkPassword } from '../utils/auth';
+import { checkCredentials } from '../utils/auth';
 
 export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -10,15 +11,21 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
     e.preventDefault();
     setBusy(true);
     setError(false);
-    const ok = await checkPassword(password);
+    const role = await checkCredentials(login, password);
     setBusy(false);
-    if (ok) {
+    if (role) {
       onUnlock();
     } else {
       setError(true);
       setPassword('');
     }
   };
+
+  const INPUT_CLS = `w-full rounded-lg border px-3 py-2 text-ink outline-none focus:ring-2 ${
+    error
+      ? 'border-goal/50 focus:ring-goal/30'
+      : 'border-line/25 focus:border-acc focus:ring-acc/30'
+  }`;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -34,31 +41,40 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
           </svg>
           <h1 className="text-xl font-bold text-ink">Goalie Stats Pro</h1>
         </div>
-        <p className="text-sm text-mut mb-2">Доступ ограничен. Введите пароль.</p>
-        <p className="text-xs text-mut/70 mb-6">Пароль администратора — полный доступ, пароль зрителя — только просмотр.</p>
+        <p className="text-sm text-mut mb-2">Доступ ограничен. Войдите по логину и паролю.</p>
+        <p className="text-xs text-mut/70 mb-6">Администратор — полный доступ, зритель — только просмотр.</p>
+
+        <label className="block text-sm font-medium text-ink mb-1" htmlFor="lock-login">
+          Логин
+        </label>
+        <input
+          id="lock-login"
+          type="text"
+          autoFocus
+          autoComplete="username"
+          value={login}
+          onChange={e => { setLogin(e.target.value); setError(false); }}
+          className={`${INPUT_CLS} mb-3`}
+        />
+
         <label className="block text-sm font-medium text-ink mb-1" htmlFor="lock-password">
           Пароль
         </label>
         <input
           id="lock-password"
           type="password"
-          autoFocus
           autoComplete="current-password"
           value={password}
           onChange={e => { setPassword(e.target.value); setError(false); }}
-          className={`w-full rounded-lg border px-3 py-2 text-ink outline-none focus:ring-2 ${
-            error
-              ? 'border-goal/50 focus:ring-goal/30'
-              : 'border-line/25 focus:border-acc focus:ring-acc/30'
-          }`}
+          className={INPUT_CLS}
         />
         {error && (
-          <p className="mt-2 text-sm text-red-600">Неверный пароль. Попробуйте ещё раз.</p>
+          <p className="mt-2 text-sm text-red-600">Неверный логин или пароль. Попробуйте ещё раз.</p>
         )}
 
         <button
           type="submit"
-          disabled={busy || !password}
+          disabled={busy || !login || !password}
           className="mt-5 w-full rounded-lg bg-acc px-4 py-2.5 text-[#0a0f1c] font-medium hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? 'Проверка…' : 'Войти'}

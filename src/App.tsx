@@ -7,7 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import SeasonsPage from './pages/SeasonsPage';
 import DataPanel from './components/DataPanel';
 import { fmtDate } from './utils/stats';
-import { isAdmin } from './utils/auth';
+import { isAdmin, getLogin, lock } from './utils/auth';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -69,6 +69,7 @@ export default function App() {
   const [dataOpen, setDataOpen] = useState(false);
   const [showSeasonModal, setShowSeasonModal] = useState(false);
   const admin = isAdmin(); // viewer — только просмотр, все элементы редактирования скрыты
+  const login = getLogin();
 
   // New game modal
   const [showNewModal, setShowNewModal] = useState(false);
@@ -142,11 +143,19 @@ export default function App() {
           <div className="text-[10px] text-mut tracking-[0.18em] uppercase hidden sm:block">Shot chart zone analysis</div>
         </div>
         <div className="flex-1" />
-        {!admin && (
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em] px-2 py-1 rounded-full bg-acc/15 text-acc" title="Read-only access">
-            👁 View only
+        {login && (
+          <span
+            className={`text-[10px] font-bold uppercase tracking-[0.14em] px-2 py-1 rounded-full ${admin ? 'bg-ok/15 text-ok' : 'bg-acc/15 text-acc'}`}
+            title={admin ? 'Administrator — full access' : 'Read-only access'}
+          >
+            {admin ? `🛡 ${login}` : `👁 ${login} · View only`}
           </span>
         )}
+        <button
+          onClick={() => { lock(); location.reload(); }}
+          className={BTN_GHOST}
+          title="Sign out"
+        >⏻</button>
         <select
           value={activeSeasonId || ''}
           onChange={e => setActiveSeason(e.target.value)}
