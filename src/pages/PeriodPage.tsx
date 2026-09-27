@@ -105,6 +105,7 @@ export default function PeriodPage() {
   const [dateFrom, setDateFrom] = useState(sortedGames[0]?.date || '');
   const [dateTo, setDateTo] = useState(sortedGames[sortedGames.length - 1]?.date || '');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [checkedGoalies, setCheckedGoalies] = useState<Record<string, boolean>>({});
 
   // Filter games by date range
   const rangeGames = useMemo(() => {
@@ -115,24 +116,39 @@ export default function PeriodPage() {
   rangeGames.forEach(g => {
     if (!(g.id in checked)) checked[g.id] = true;
   });
+  // Initialize checked state for goalies (default: all selected)
+  goalies.forEach(p => {
+    if (!(p.id in checkedGoalies)) checkedGoalies[p.id] = true;
+  });
 
   const selectedGames = rangeGames.filter(g => checked[g.id]);
-  const m = aggGames(selectedGames);
+  const selGoalie = (id: string) => checkedGoalies[id] !== false;
+  const selectedGoalies = goalies.filter(p => selGoalie(p.id));
+  const goalieFilterActive = selectedGoalies.length < goalies.length;
+
+  // Игры с событиями только выбранных вратарей — вся статистика ниже
+  const statGames = useMemo(
+    () => selectedGames.map(g => ({ ...g, events: g.events.filter(e => selGoalie(e.g)) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedGames, checkedGoalies]
+  );
+
+  const m = aggGames(statGames);
   const tt = totals(m);
   const st = selTotals(m);
 
-  // All events and goal events from selected games
-  const allEvents = selectedGames.flatMap(g => g.events);
+  // All events and goal events from selected games (только выбранные вратари)
+  const allEvents = statGames.flatMap(g => g.events);
   const goalEvents = allEvents.filter(e => e.t === 'goal');
 
   const svVal = tt.s > 0 ? 100 * (tt.s - tt.g) / tt.s : null;
   const dsvVal = st.s > 0 ? 100 * (st.s - st.g) / st.s : null;
   const rec = recordParts(selectedGames);
 
-  // Goalie summary
+  // Goalie summary — только выбранные вратари
   const goalieStats = useMemo(() => {
     const per: Record<string, { games: Set<string>; s: number; g: number }> = {};
-    selectedGames.forEach(g => {
+    statGames.forEach(g => {
       g.events.forEach(e => {
         if (!per[e.g]) per[e.g] = { games: new Set(), s: 0, g: 0 };
         per[e.g].games.add(g.id);
@@ -140,20 +156,21 @@ export default function PeriodPage() {
         if (e.t === 'goal') per[e.g].g++;
       });
     });
-    return goalies.map(p => {
+    return goalies.filter(p => selGoalie(p.id)).map(p => {
       const r = per[p.id];
       const s = r ? r.s : 0, gg = r ? r.g : 0, ng = r ? r.games.size : 0;
       let toi = 0;
       selectedGames.forEach(g => { toi += (g.toi && +g.toi[p.id]) || 0; });
       return { ...p, s, g: gg, ng, toi, gaa: gaa(gg, toi, ng) };
     });
-  }, [selectedGames, goalies]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statGames, selectedGames, goalies, checkedGoalies]);
 
   // Sparkline: SV% по ВСЕМ выбранным играм, отдельно по каждому вратарю
   const sparkRows = useMemo(() => {
-    return goalies.map(p => {
+    return goalies.filter(p => selGoalie(p.id)).map(p => {
       const pts: { date: string; sv: number; shots: number; goals: number; opp: string }[] = [];
-      selectedGames.forEach(g => {
+      statGames.forEach(g => {
         let s = 0, gg = 0;
         g.events.forEach(e => { if (e.g === p.id) { s++; if (e.t === 'goal') gg++; } });
         if (s > 0) pts.push({ date: g.date, sv: 100 * (s - gg) / s, shots: s, goals: gg, opp: g.opponent || '' });
@@ -161,7 +178,8 @@ export default function PeriodPage() {
       const avg = pts.length ? pts.reduce((a, x) => a + x.sv, 0) / pts.length : null;
       return { ...p, pts, avg };
     }).filter(r => r.pts.length > 0);
-  }, [selectedGames, goalies]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statGames, goalies, checkedGoalies]);
 
   // Period breakdown
   const periodStats = useMemo(() => {
@@ -255,6 +273,16 @@ export default function PeriodPage() {
     setChecked(nc);
   };
 
+  const toggleGoalie = (id: string) => {
+    setCheckedGoalies(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const selectAllGoalies = () => {
+    const nc: Record<string, boolean> = {};
+    goalies.forEach(p => { nc[p.id] = true; });
+    setCheckedGoalies(nc);
+  };
+
   // CSV export
   const exportCsv = () => {
     const rows = [['zone', 'name', 'scope', 'shots', 'goals', 'saves', 'sv_pct', 'conv_pct']];
@@ -317,6 +345,32 @@ export default function PeriodPage() {
             </label>
           ))}
           {!rangeGames.length && <span className="text-sm text-mut p-2">No games in range.</span>}
+        </div>
+        {/* Выбор вратарей — статистика считается только по отмеченным */}
+        <div className="flex flex-wrap gap-2 items-center p-1 pt-2 border-t border-line/10">
+          <span className={MICRO + ' mr-1'}>Goalies</span>
+          {goalies.map(p => {
+            const on = selGoalie(p.id);
+            const evCnt = selectedGames.reduce((a, g) => a + g.events.filter(e => e.g === p.id).length, 0);
+            return (
+              <label key={p.id} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg cursor-pointer text-sm transition ${on ? 'border-acc bg-panel2/70' : 'border-line bg-panel2/70 opacity-50 hover:opacity-80'}`}>
+                <input type="checkbox" checked={on} onChange={() => toggleGoalie(p.id)} />
+                {p.photo && <img src={p.photo} alt="" className="w-5 h-5 rounded-full object-cover bg-panel2" />}
+                <span>{p.name}</span>
+                <span className="text-xs text-mut">({evCnt})</span>
+              </label>
+            );
+          })}
+          {goalieFilterActive && (
+            <button onClick={selectAllGoalies} className="px-2 py-1 rounded-lg border border-line/20 text-[11px] font-semibold text-mut hover:text-ink hover:bg-white/5 transition">
+              all goalies
+            </button>
+          )}
+          {goalieFilterActive && (
+            <span className="text-[10px] font-semibold" style={{ color: ACCENT }}>
+              stats for {selectedGoalies.map(p => p.name).join(' + ')}
+            </span>
+          )}
         </div>
       </div>
 
@@ -474,11 +528,11 @@ export default function PeriodPage() {
               </tr>
             </thead>
             <tbody>
-              {selectedGames.map((g, ri) => {
+              {statGames.map((g, ri) => {
                 const gm = aggEvents(g.events);
                 const t = totals(gm);
                 let toiG = 0;
-                Object.values(g.toi || {}).forEach(v => { toiG += (+v || 0); });
+                Object.entries(g.toi || {}).forEach(([gid, v]) => { if (selGoalie(gid)) toiG += (+v || 0); });
                 let topZ: number | null = null, topS = -1;
                 ZONES.filter(z => z.tier === 'sel').forEach(z => {
                   const s = (gm[z.id] || { s: 0 }).s;
@@ -657,7 +711,7 @@ export default function PeriodPage() {
           <div>
             <div className="text-xl font-black tracking-tight">GOALIE STATS PRO — SEASON REPORT</div>
             <div className="text-[10px] text-neutral-600 mt-0.5">
-              Season: {activeSeason?.name || '—'}{seasonTeam ? ` · Team: ${seasonTeam.name}` : ''} · Period: {dateFrom || 'start'} — {dateTo || 'now'} · {selectedGames.length} game(s) · Generated {new Date().toLocaleDateString('ru-RU')}
+              Season: {activeSeason?.name || '—'}{seasonTeam ? ` · Team: ${seasonTeam.name}` : ''} · Period: {dateFrom || 'start'} — {dateTo || 'now'} · {selectedGames.length} game(s){goalieFilterActive ? ` · Goalies: ${selectedGoalies.map(p => p.name).join(' + ')}` : ''} · Generated {new Date().toLocaleDateString('ru-RU')}
             </div>
           </div>
           <div className="flex-1" />
@@ -796,11 +850,11 @@ export default function PeriodPage() {
               </tr>
             </thead>
             <tbody>
-              {selectedGames.map(g => {
+              {statGames.map(g => {
                 const gm = aggEvents(g.events);
                 const t = totals(gm);
                 let toiG = 0;
-                Object.values(g.toi || {}).forEach(v => { toiG += (+v || 0); });
+                Object.entries(g.toi || {}).forEach(([gid, v]) => { if (selGoalie(gid)) toiG += (+v || 0); });
                 let topZ: number | null = null, topS = -1;
                 ZONES.filter(z => z.tier === 'sel').forEach(z => {
                   const s = (gm[z.id] || { s: 0 }).s;
