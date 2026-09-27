@@ -7,16 +7,16 @@ import { useNavigate } from 'react-router-dom';
 
 // Единый с дашбордом язык: коралл — акцент и худшая зона, тепло и каскады
 const ACCENT = 'rgb(255,130,100)';
-const INK = '#16181d';
+const INK = '#e8eef8';
 // 7 ступеней: красный → оранжевый → янтарь → жёлтый → зелёный (всё яркое, без серого)
 const svColor = (v: number) =>
-  v >= 95 ? '#15803d' : // green-700
-  v >= 92 ? '#16a34a' : // green-600
-  v >= 89 ? '#a16207' : // yellow-700
-  v >= 86 ? '#d97706' : // amber-600
-  v >= 83 ? '#ea580c' : // orange-600
-  v >= 80 ? '#c2410c' : // orange-700
-  '#dc2626';           // red-600
+  v >= 95 ? '#4ade80' : // green-700
+  v >= 92 ? '#a3e635' : // green-600
+  v >= 89 ? '#fde047' : // yellow-700
+  v >= 86 ? '#fbbf24' : // amber-600
+  v >= 83 ? '#fb923c' : // orange-600
+  v >= 80 ? '#f87171' : // orange-700
+  '#ef4444';           // red-600
 const MICRO = 'text-[10px] uppercase tracking-[0.14em] text-mut font-semibold';
 
 // Aggregate events across multiple games
@@ -51,7 +51,7 @@ function recordParts(games: Game[]) {
 }
 
 const badgeStyle = (gf: number, ga: number): [string, string] =>
-  gf > ga ? ['W', '#059669'] : gf < ga ? ['L', '#dc2626'] : ['T', '#9ca3af'];
+  gf > ga ? ['W', '#34d399'] : gf < ga ? ['L', '#f87171'] : ['T', '#8596b0'];
 
 // ── SVG sparkline по всем выбранным играм (1 точка — просто круг) ──
 function SeasonSpark({ pts }: { pts: { date: string; sv: number; shots: number; goals: number; opp: string }[] }) {
@@ -300,17 +300,17 @@ export default function PeriodPage() {
           <span className={MICRO}>Season scope{activeSeason ? ` · 🏆 ${activeSeason.name}` : ''}</span>
           <span className="flex-1" />
           <label className="text-xs font-semibold text-mut">From</label>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-white" />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-panel2/70" />
           <label className="text-xs font-semibold text-mut">To</label>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-white" />
-          <button onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">All</button>
-          <button onClick={selectNone} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50">None</button>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm bg-panel2/70" />
+          <button onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-panel2/40">All</button>
+          <button onClick={selectNone} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-panel2/40">None</button>
           <button onClick={exportCsv} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Export CSV</button>
-          <button onClick={printReport} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-slate-50 transition">🖨 Report / PDF</button>
+          <button onClick={printReport} className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-panel2/40 transition">🖨 Report / PDF</button>
         </div>
         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
           {rangeGames.map(g => (
-            <label key={g.id} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg cursor-pointer text-sm transition ${checked[g.id] ? 'border-slate-900 bg-white' : 'border-line bg-white opacity-50 hover:opacity-80'}`}>
+            <label key={g.id} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg cursor-pointer text-sm transition ${checked[g.id] ? 'border-acc bg-panel2/70' : 'border-line bg-panel2/70 opacity-50 hover:opacity-80'}`}>
               <input type="checkbox" checked={!!checked[g.id]} onChange={() => toggleCheck(g.id)} />
               <span>{fmtDate(g.date)}{g.opponent ? ` · ${g.opponent}` : ''}</span>
               <span className="text-xs text-mut">({g.events.length})</span>
@@ -368,11 +368,11 @@ export default function PeriodPage() {
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums">
                         {c.s}
-                        <span className="inline-block w-16 h-1.5 bg-slate-100 rounded ml-2 align-middle overflow-hidden">
+                        <span className="inline-block w-16 h-1.5 bg-panel2 rounded ml-2 align-middle overflow-hidden">
                           <span className="block h-full rounded" style={{ width: `${100 * c.s / maxS}%`, background: isWorst ? ACCENT : 'var(--save)' }} />
                         </span>
                       </td>
-                      <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: c.g ? '#dc2626' : undefined }}>{c.g || '—'}</td>
+                      <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: c.g ? '#f87171' : undefined }}>{c.g || '—'}</td>
                       <td className="py-2 px-2 text-right tabular-nums">{c.s - c.g}</td>
                       <td className="py-2 px-2 text-right tabular-nums">
                         {sv !== null
@@ -391,7 +391,7 @@ export default function PeriodPage() {
               <tr className="font-bold border-t-2 border-line">
                 <td className="py-2 pr-3">TOTAL</td>
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s}</td>
-                <td className="py-2 px-2 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g || '—'}</td>
+                <td className="py-2 px-2 text-right tabular-nums" style={{ color: tt.g ? '#f87171' : undefined }}>{tt.g || '—'}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{tt.s - tt.g}</td>
                 <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{pct(tt.s - tt.g, tt.s)}</td>
                 <td className="py-2 px-2 text-right tabular-nums text-mut">{pct(tt.g, tt.s)}</td>
@@ -420,7 +420,7 @@ export default function PeriodPage() {
             {sparkRows.map((row, ri) => (
               <div key={row.id} className="py-3 flex items-center gap-4 fade-row" style={{ ['--i' as any]: ri }}>
                 <div className="flex items-center gap-2 w-44 shrink-0 min-w-0">
-                  {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200 shrink-0" />}
+                  {row.photo && <img src={row.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2 shrink-0" />}
                   <span className="font-bold text-sm truncate">{row.name}</span>
                 </div>
                 <div className="flex-1 min-w-0"><SeasonSpark pts={row.pts} /></div>
@@ -440,7 +440,7 @@ export default function PeriodPage() {
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {[
           ['Most shots (danger)', maxZone.shots > 0 ? `Z${maxZone.id} · ${zoneName(maxZone.id!)}` : 'no data', `${maxZone.shots} shots`, undefined],
-          ['Goals conceded from', goalZones.length ? goalZones.join(', ') : 'no goals', `${tt.g} GA`, '#dc2626'],
+          ['Goals conceded from', goalZones.length ? goalZones.join(', ') : 'no goals', `${tt.g} GA`, '#f87171'],
           ['Outside danger zones', `${tt.s - st.s} shot(s)`, `${tt.s} total shots`, undefined],
           ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : 'no results', rec.parts.join(' · ') || '—', undefined],
         ].map(([label, value, sub, color], i) => (
@@ -486,7 +486,7 @@ export default function PeriodPage() {
                 });
                 const gsv = t.s > 0 ? 100 * (t.s - t.g) / t.s : null;
                 const r = g.result;
-                const [lab, col] = r ? badgeStyle(+r.gf || 0, +r.ga || 0) : ['—', '#9ca3af'];
+                const [lab, col] = r ? badgeStyle(+r.gf || 0, +r.ga || 0) : ['—', '#8596b0'];
                 return (
                   <tr key={g.id} className="border-b border-line/50 fade-row cursor-pointer" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }} onClick={() => handleOpenGame(g.id)}>
                     <td className="py-2 pr-3 whitespace-nowrap">{fmtDate(g.date)}</td>
@@ -500,7 +500,7 @@ export default function PeriodPage() {
                       ) : '—'}
                     </td>
                     <td className="py-2 px-2 text-right tabular-nums">{t.s}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: t.g ? '#dc2626' : undefined }}>{t.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: t.g ? '#f87171' : undefined }}>{t.g || '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(t.s - t.g, t.s)}</td>
                     <td className="py-2 px-2 text-left text-xs text-mut">{topS > 0 ? `Z${topZ} · ${zoneName(topZ!)} (${topS})` : '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{gaa(t.g, toiG, 1)}</td>
@@ -535,10 +535,10 @@ export default function PeriodPage() {
                 const gsv = p.s > 0 ? 100 * (p.s - p.g) / p.s : null;
                 return (
                   <tr key={p.id} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
-                    <td className="py-2 pr-3 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{p.photo && <img src={p.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-200" />}{p.name}</div></td>
+                    <td className="py-2 pr-3 font-medium whitespace-nowrap"><div className="flex items-center gap-2">{p.photo && <img src={p.photo} alt="" className="w-6 h-6 rounded-full object-cover bg-panel2" />}{p.name}</div></td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.ng}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#f87171' : undefined }}>{p.g || '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.toi ? Math.round(p.toi) : '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.gaa}</td>
@@ -589,7 +589,7 @@ export default function PeriodPage() {
                 return (
                   <div key={t.name} className="py-2 flex items-center gap-3 text-sm">
                     <span className="flex-1">{t.name}</span>
-                    <span className="w-20 h-1.5 bg-red-100 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * t.count / maxC}%` }} /></span>
+                    <span className="w-20 h-1.5 bg-goal/15 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * t.count / maxC}%` }} /></span>
                     <span className="font-bold tabular-nums w-6 text-right">{t.count}</span>
                   </div>
                 );
@@ -606,7 +606,7 @@ export default function PeriodPage() {
                 return (
                   <div key={p.name} className="py-2 flex items-center gap-3 text-sm">
                     <span className="flex-1">{p.name}</span>
-                    <span className="w-20 h-1.5 bg-red-100 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * p.count / maxC}%` }} /></span>
+                    <span className="w-20 h-1.5 bg-goal/15 rounded overflow-hidden shrink-0"><span className="block h-full bg-goal rounded" style={{ width: `${100 * p.count / maxC}%` }} /></span>
                     <span className="font-bold tabular-nums w-6 text-right">{p.count}</span>
                   </div>
                 );
@@ -638,7 +638,7 @@ export default function PeriodPage() {
                   <tr key={p.period} className="border-b border-line/50 fade-row" style={{ ['--i' as any]: ri, transition: 'opacity 0.15s' }}>
                     <td className="py-2 pr-4 font-medium">{p.period === '—' ? 'not set' : p.period}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.s}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: p.g ? '#f87171' : undefined }}>{p.g || '—'}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{p.s - p.g}</td>
                     <td className="py-2 px-2 text-right tabular-nums font-bold" style={{ color: sv !== null ? svColor(sv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                   </tr>
@@ -675,7 +675,7 @@ export default function PeriodPage() {
               <tr className="border-y border-neutral-400">
                 {[
                   ['Games', selectedGames.length, undefined], ['Shots', tt.s, undefined], ['Saves', tt.s - tt.g, undefined],
-                  ['GA', tt.g, tt.g ? '#dc2626' : undefined],
+                  ['GA', tt.g, tt.g ? '#f87171' : undefined],
                   ['Danger SV%', dsvVal !== null ? dsvVal.toFixed(1) + '%' : '—', dsvVal !== null ? svColor(dsvVal) : undefined],
                   ['Record', rec.hasResults ? `${rec.w}–${rec.l}${rec.t ? `–${rec.t}` : ''}` : '—', undefined],
                 ].map(([l, v, c], i) => (
@@ -708,7 +708,7 @@ export default function PeriodPage() {
                   <tr key={z.id} className={`border-b border-neutral-300 ${z.tier === 'tot' ? 'text-neutral-500' : ''}`}>
                     <td className="py-1 pr-2">{z.id}. {z.name}</td>
                     <td className="py-1 text-right tabular-nums">{c.s}</td>
-                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: c.g ? '#dc2626' : undefined }}>{c.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: c.g ? '#f87171' : undefined }}>{c.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums">{c.s - c.g}</td>
                     <td className="py-1 text-right tabular-nums font-bold" style={{ color: sv !== null ? svColor(sv) : undefined }}>{pct(c.s - c.g, c.s)}</td>
                     <td className="py-1 text-right tabular-nums">{pct(c.g, c.s)}</td>
@@ -718,7 +718,7 @@ export default function PeriodPage() {
               <tr className="border-t-2 border-black font-bold">
                 <td className="py-1">TOTAL</td>
                 <td className="py-1 text-right tabular-nums">{tt.s}</td>
-                <td className="py-1 text-right tabular-nums" style={{ color: tt.g ? '#dc2626' : undefined }}>{tt.g}</td>
+                <td className="py-1 text-right tabular-nums" style={{ color: tt.g ? '#f87171' : undefined }}>{tt.g}</td>
                 <td className="py-1 text-right tabular-nums">{tt.s - tt.g}</td>
                 <td className="py-1 text-right tabular-nums" style={{ color: svVal !== null ? svColor(svVal) : undefined }}>{pct(tt.s - tt.g, tt.s)}</td>
                 <td className="py-1 text-right tabular-nums">{pct(tt.g, tt.s)}</td>
@@ -747,7 +747,7 @@ export default function PeriodPage() {
                     <td className="py-1 pr-2 font-semibold">{p.name}</td>
                     <td className="py-1 text-right tabular-nums">{p.ng}</td>
                     <td className="py-1 text-right tabular-nums">{p.s}</td>
-                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#f87171' : undefined }}>{p.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                     <td className="py-1 text-right tabular-nums">{p.gaa}</td>
                   </tr>
@@ -773,7 +773,7 @@ export default function PeriodPage() {
                   <tr key={p.period} className="border-b border-neutral-300">
                     <td className="py-1 pr-2 font-semibold">{p.period === '—' ? 'not set' : p.period}</td>
                     <td className="py-1 text-right tabular-nums">{p.s}</td>
-                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#dc2626' : undefined }}>{p.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: p.g ? '#f87171' : undefined }}>{p.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums">{p.s - p.g}</td>
                     <td className="py-1 text-right tabular-nums font-bold" style={{ color: psv !== null ? svColor(psv) : undefined }}>{pct(p.s - p.g, p.s)}</td>
                   </tr>
@@ -810,14 +810,14 @@ export default function PeriodPage() {
                 const gfR = r ? +r.gf || 0 : 0, gaR = r ? +r.ga || 0 : 0;
                 const res = r ? `${gfR}:${gaR}${r.dec ? ` ${r.dec}` : ''}` : '—';
                 const gsv = t.s > 0 ? 100 * (t.s - t.g) / t.s : null;
-                const resCol = !r ? undefined : gfR > gaR ? '#15803d' : gfR < gaR ? '#dc2626' : undefined;
+                const resCol = !r ? undefined : gfR > gaR ? '#4ade80' : gfR < gaR ? '#f87171' : undefined;
                 return (
                   <tr key={g.id} className="border-b border-neutral-300">
                     <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(g.date)}</td>
                     <td className="py-1 pr-2">{g.opponent || '—'}</td>
                     <td className="py-1 text-center font-bold tabular-nums" style={{ color: resCol }}>{res}</td>
                     <td className="py-1 text-right tabular-nums">{t.s}</td>
-                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: t.g ? '#dc2626' : undefined }}>{t.g || '—'}</td>
+                    <td className="py-1 text-right tabular-nums font-bold" style={{ color: t.g ? '#f87171' : undefined }}>{t.g || '—'}</td>
                     <td className="py-1 text-right tabular-nums font-bold" style={{ color: gsv !== null ? svColor(gsv) : undefined }}>{pct(t.s - t.g, t.s)}</td>
                     <td className="py-1 text-right text-neutral-600">{topS > 0 ? `Z${topZ}` : '—'} <span className="text-neutral-400">({gaa(t.g, toiG, 1)} GAA)</span></td>
                   </tr>

@@ -10,6 +10,22 @@ import { fmtDate } from './utils/stats';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+// Общие классы тёмной темы
+const INPUT = 'bg-panel2/70 border border-line/20 rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-acc/40 focus:border-acc';
+const BTN_GHOST = 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-line/20 text-mut hover:text-ink hover:bg-white/5 transition disabled:opacity-40';
+const BTN_ICON = 'px-1.5 py-1 rounded border border-line/20 text-xs text-mut hover:text-ink hover:bg-white/5 transition';
+const BTN_DANGER = 'px-1.5 py-1 rounded text-xs text-goal border border-goal/30 hover:bg-goal/10 transition';
+
+// Логотип — стилизованная сетка ворот
+function BrandMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 5h18v12a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V5Z" stroke="rgb(var(--acc))" strokeWidth="1.8" />
+      <path d="M3 9.5h18M3 14h18M8 5v13.5M12 5v16M16 5v13.5" stroke="rgb(var(--acc) / 0.55)" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 // Компонент загрузки логотипа с ресайзом
 function useLogoUpload(onLoad: (dataUrl: string) => void) {
   const ref = useRef<HTMLInputElement>(null);
@@ -113,57 +129,60 @@ export default function App() {
     .sort((a, b) => a.date > b.date ? -1 : 1);
 
   return (
-    <div className="min-h-screen bg-[#f2f4f7]">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-slate-900 text-white px-4 py-2 flex items-center gap-3 sticky top-0 z-50 shadow-md">
-        {teamLogo && <img src={teamLogo} alt="Team" className="w-7 h-7 rounded-lg bg-white p-0.5 object-contain" />}
-        <h1 className="text-base font-bold tracking-tight">🥅 Goalie Stats Pro</h1>
-        <span className="text-[11px] text-slate-400 hidden sm:inline">Shot chart zone analysis</span>
+      <header className="sticky top-0 z-50 border-b border-line/10 bg-[#0a0f1c]/85 backdrop-blur-md px-4 py-2.5 flex items-center gap-3">
+        {teamLogo && <img src={teamLogo} alt="Team" className="w-7 h-7 rounded-lg bg-white/90 p-0.5 object-contain" />}
+        <BrandMark />
+        <div className="leading-tight">
+          <h1 className="text-sm font-black tracking-wide uppercase">Goalie Stats Pro</h1>
+          <div className="text-[10px] text-mut tracking-[0.18em] uppercase hidden sm:block">Shot chart zone analysis</div>
+        </div>
         <div className="flex-1" />
         <select
           value={activeSeasonId || ''}
           onChange={e => setActiveSeason(e.target.value)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-slate-400 max-w-[140px] truncate"
+          className="bg-panel2/70 border border-line/20 rounded-lg px-2 py-1 text-[11px] font-semibold text-ink focus:outline-none focus:border-acc max-w-[140px] truncate"
           title="Active season"
         >
           {seasons.map(s => <option key={s.id} value={s.id}>🏆 {s.name}</option>)}
         </select>
-        <button onClick={() => setShowSeasonModal(true)} className="text-[11px] px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-slate-400 transition" title="Manage seasons & teams">⚙</button>
-        <button onClick={toggleMirror} className={`text-[11px] px-2 py-1 rounded border transition ${mirror ? 'bg-white text-slate-900 border-white' : 'border-slate-600 text-slate-300 hover:border-slate-400'}`}>⇄ {mirror ? 'Left' : 'Right'}</button>
+        <button onClick={() => setShowSeasonModal(true)} className={BTN_GHOST} title="Manage seasons & teams">⚙</button>
+        <button onClick={toggleMirror} className={`px-2 py-1 rounded-lg text-[11px] font-semibold border transition ${mirror ? 'bg-acc text-[#0a0f1c] border-transparent' : 'border-line/20 text-mut hover:text-ink hover:bg-white/5'}`}>⇄ {mirror ? 'Left' : 'Right'}</button>
       </header>
 
       <div className="max-w-7xl mx-auto p-3 space-y-3 page-wrap">
         {/* Game Selector Bar */}
         <div className="card px-3 py-2 flex flex-wrap gap-2 items-center">
-          <label className="text-xs font-semibold text-mut">Game{activeSeason ? ` · ${activeSeason.name}` : ''}:</label>
-          <select value={activeId || ''} onChange={e => setActiveGame(e.target.value)} className="flex-1 min-w-[180px] border border-line rounded-lg px-2 py-1.5 text-sm bg-white">
+          <label className="text-[10px] uppercase tracking-[0.14em] font-semibold text-mut">Game{activeSeason ? ` · ${activeSeason.name}` : ''}</label>
+          <select value={activeId || ''} onChange={e => setActiveGame(e.target.value)} className="flex-1 min-w-[180px] bg-panel2/70 border border-line/20 rounded-lg px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-acc">
             {sortedGames.map(g => (
               <option key={g.id} value={g.id}>{fmtDate(g.date)}{g.opponent ? ` · ${g.opponent}` : ''}{g.result ? ` · ${g.result.gf}:${g.result.ga}` : ''}</option>
             ))}
           </select>
-          <button onClick={openEditModal} disabled={!activeId} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition disabled:opacity-40" title="Edit date / opponent of the selected game">✎ Edit</button>
-          <button onClick={openNewModal} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold border transition">+ New</button>
+          <button onClick={openEditModal} disabled={!activeId} className={BTN_GHOST} title="Edit date / opponent of the selected game">✎ Edit</button>
+          <button onClick={openNewModal} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold transition">+ New</button>
           <button onClick={() => activeId && confirm('Delete this game?') && deleteGame(activeId)} className="btn-danger px-3 py-1.5 rounded-lg text-xs font-semibold border transition">Delete</button>
         </div>
 
         {/* New Game Modal */}
         {showNewModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowNewModal(false)}>
-            <div className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-              <h2 className="text-base font-bold"> New Game{activeSeason ? ` · ${activeSeason.name}` : ''}</h2>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowNewModal(false)}>
+            <div className="bg-card border border-line/15 rounded-2xl shadow-2xl p-5 w-full max-w-sm mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <h2 className="text-base font-bold">New Game{activeSeason ? ` · ${activeSeason.name}` : ''}</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-mut mb-1">Match date</label>
-                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc" autoFocus />
+                  <label className="block text-[10px] uppercase tracking-[0.14em] font-semibold text-mut mb-1">Match date</label>
+                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className={`w-full ${INPUT}`} autoFocus />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-mut mb-1">Opponent</label>
-                  <input type="text" value={newOpp} onChange={e => setNewOpp(e.target.value)} placeholder="e.g. TOR, CSKA, Dynamo Mn..." onKeyDown={e => { if (e.key === 'Enter') confirmNewGame(); }} className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc" />
+                  <label className="block text-[10px] uppercase tracking-[0.14em] font-semibold text-mut mb-1">Opponent</label>
+                  <input type="text" value={newOpp} onChange={e => setNewOpp(e.target.value)} placeholder="e.g. TOR, CSKA, Dynamo Mn..." onKeyDown={e => { if (e.key === 'Enter') confirmNewGame(); }} className={`w-full ${INPUT}`} />
                 </div>
               </div>
               <div className="flex gap-2 justify-end pt-1">
-                <button onClick={() => setShowNewModal(false)} className="px-4 py-2 rounded-lg text-sm border border-line hover:bg-slate-50 transition">Cancel</button>
-                <button onClick={confirmNewGame} disabled={!newDate} className="btn-primary px-4 py-2 rounded-lg text-sm font-semibold border transition disabled:opacity-40">Create Game</button>
+                <button onClick={() => setShowNewModal(false)} className={BTN_GHOST}>Cancel</button>
+                <button onClick={confirmNewGame} disabled={!newDate} className="btn-primary px-4 py-2 rounded-lg text-sm font-bold transition disabled:opacity-40">Create Game</button>
               </div>
             </div>
           </div>
@@ -171,22 +190,22 @@ export default function App() {
 
         {/* Edit Game Modal */}
         {showEditModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowEditModal(false)}>
-            <div className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowEditModal(false)}>
+            <div className="bg-card border border-line/15 rounded-2xl shadow-2xl p-5 w-full max-w-sm mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
               <h2 className="text-base font-bold">✎ Edit Game Info</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-mut mb-1">Match date</label>
-                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc" autoFocus />
+                  <label className="block text-[10px] uppercase tracking-[0.14em] font-semibold text-mut mb-1">Match date</label>
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className={`w-full ${INPUT}`} autoFocus />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-mut mb-1">Opponent</label>
-                  <input type="text" value={editOpp} onChange={e => setEditOpp(e.target.value)} placeholder="e.g. TOR, CSKA, Dynamo Mn..." onKeyDown={e => { if (e.key === 'Enter') confirmEditGame(); }} className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc" />
+                  <label className="block text-[10px] uppercase tracking-[0.14em] font-semibold text-mut mb-1">Opponent</label>
+                  <input type="text" value={editOpp} onChange={e => setEditOpp(e.target.value)} placeholder="e.g. TOR, CSKA, Dynamo Mn..." onKeyDown={e => { if (e.key === 'Enter') confirmEditGame(); }} className={`w-full ${INPUT}`} />
                 </div>
               </div>
               <div className="flex gap-2 justify-end pt-1">
-                <button onClick={() => setShowEditModal(false)} className="px-4 py-2 rounded-lg text-sm border border-line hover:bg-slate-50 transition">Cancel</button>
-                <button onClick={confirmEditGame} disabled={!editDate} className="btn-primary px-4 py-2 rounded-lg text-sm font-semibold border transition disabled:opacity-40">Save Changes</button>
+                <button onClick={() => setShowEditModal(false)} className={BTN_GHOST}>Cancel</button>
+                <button onClick={confirmEditGame} disabled={!editDate} className="btn-primary px-4 py-2 rounded-lg text-sm font-bold transition disabled:opacity-40">Save Changes</button>
               </div>
             </div>
           </div>
@@ -198,15 +217,15 @@ export default function App() {
         )}
 
         {/* Navigation Tabs */}
-        <nav className="flex gap-1.5 border-b border-line pb-0.5 overflow-x-auto">
+        <nav className="flex gap-1 border-b border-line/10 overflow-x-auto">
           {[
-            { to: '/', label: '🏒 Game' },
-            { to: '/period', label: '📊 Season' },
-            { to: '/dashboard', label: '📈 Dashboard' },
-            { to: '/seasons', label: '🏆 Seasons' },
+            { to: '/', label: 'Game' },
+            { to: '/period', label: 'Season' },
+            { to: '/dashboard', label: 'Dashboard' },
+            { to: '/seasons', label: 'Seasons' },
           ].map(tab => (
             <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className={({ isActive }) =>
-              `px-4 py-2 rounded-t-lg text-xs font-semibold border border-b-0 transition whitespace-nowrap ${isActive ? 'bg-white text-acc border-line border-b-white -mb-px z-10' : 'bg-transparent text-mut border-transparent hover:text-ink hover:bg-white/50'}`
+              `px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] border-b-2 -mb-px transition whitespace-nowrap ${isActive ? 'text-acc border-acc' : 'text-mut border-transparent hover:text-ink'}`
             }>{tab.label}</NavLink>
           ))}
         </nav>
@@ -224,14 +243,14 @@ export default function App() {
 
       {/* Collapsible Data Panel */}
       <div className="max-w-7xl mx-auto px-3 pb-3 data-panel-wrap">
-        <button onClick={() => setDataOpen(!dataOpen)} className="w-full card px-3 py-2 flex items-center justify-between text-xs font-semibold text-mut hover:text-ink transition">
-          <span>💾 Data Management</span>
+        <button onClick={() => setDataOpen(!dataOpen)} className="w-full card px-3 py-2 flex items-center justify-between text-[10px] uppercase tracking-[0.14em] font-semibold text-mut hover:text-ink transition">
+          <span>Data Management</span>
           <span className="text-[10px]">{dataOpen ? '▲' : '▼'}</span>
         </button>
         {dataOpen && <div className="mt-2"><DataPanel /></div>}
       </div>
 
-      <footer className="text-center text-[10px] text-mut py-6">
+      <footer className="text-center text-[10px] text-mut/70 py-6 tracking-wide">
         Goalie Stats Pro · Auto-saved in browser · Drop .json to import
       </footer>
     </div>
@@ -267,28 +286,28 @@ function SeasonTeamModal({ onClose }: { onClose: () => void }) {
   const seasonGamesCount = (sid: string) => games.filter(g => g.seasonId === sid).length;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 space-y-5 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-card border border-line/15 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 space-y-5 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold">⚙ Seasons & Teams</h2>
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line hover:bg-slate-50 transition">✕ Close</button>
+          <button onClick={onClose} className={BTN_GHOST}>✕ Close</button>
         </div>
 
         <div className="grid md:grid-cols-2 gap-5">
           {/* Seasons */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-mut">🏆 Seasons</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-mut">🏆 Seasons</h3>
             <div className="space-y-2">
               {seasons.map(s => {
                 const cnt = seasonGamesCount(s.id);
                 const isActive = s.id === activeSeasonId;
                 return (
-                  <div key={s.id} className={`border rounded-lg p-2 space-y-1.5 ${isActive ? 'border-acc bg-acc/5' : 'border-line'}`}>
+                  <div key={s.id} className={`border rounded-xl p-2 space-y-1.5 ${isActive ? 'border-acc/50 bg-acc/5' : 'border-line/15'}`}>
                     <div className="flex items-center gap-2">
                       <input
                         value={s.name}
                         onChange={e => renameSeason(s.id, e.target.value)}
-                        className="flex-1 min-w-0 border border-line rounded px-2 py-1 text-sm font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc"
+                        className="flex-1 min-w-0 bg-panel2/70 border border-line/20 rounded px-2 py-1 text-sm font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-acc/40 focus:border-acc"
                       />
                       <span className="text-[10px] text-mut whitespace-nowrap">{cnt} game{cnt === 1 ? '' : 's'}</span>
                       <button
@@ -297,14 +316,14 @@ function SeasonTeamModal({ onClose }: { onClose: () => void }) {
                           if (seasons.length <= 1) { alert('❌ At least one season is required.'); return; }
                           if (confirm(`Delete season "${s.name}"?`)) deleteSeason(s.id);
                         }}
-                        className="px-1.5 py-1 rounded text-xs text-red-500 border border-red-200 hover:bg-red-50 transition"
+                        className={BTN_DANGER}
                         title={cnt > 0 ? 'Has games — cannot delete' : 'Delete season'}
                       >✕</button>
                     </div>
                     <select
                       value={s.teamId || ''}
                       onChange={e => setSeasonTeam(s.id, e.target.value || undefined)}
-                      className="w-full border border-line rounded px-2 py-1 text-xs bg-white text-mut focus:outline-none focus:border-acc"
+                      className="w-full bg-panel2/70 border border-line/20 rounded px-2 py-1 text-xs text-mut focus:outline-none focus:border-acc"
                     >
                       <option value="">— no team —</option>
                       {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -313,26 +332,26 @@ function SeasonTeamModal({ onClose }: { onClose: () => void }) {
                 );
               })}
             </div>
-            <div className="border border-dashed border-line rounded-lg p-2 space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-mut">+ New season</div>
+            <div className="border border-dashed border-line/25 rounded-xl p-2 space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-mut">+ New season</div>
               <div className="flex gap-2">
                 <input
                   value={newSeasonName}
                   onChange={e => setNewSeasonName(e.target.value)}
                   placeholder="e.g. 2026/27"
-                  className="flex-1 min-w-0 border border-line rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc"
+                  className="flex-1 min-w-0 bg-panel2/70 border border-line/20 rounded px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-acc/40 focus:border-acc"
                 />
                 <select
                   value={newSeasonTeam}
                   onChange={e => setNewSeasonTeam(e.target.value)}
-                  className="border border-line rounded px-2 py-1 text-xs bg-white text-mut"
+                  className="bg-panel2/70 border border-line/20 rounded px-2 py-1 text-xs text-mut"
                 >
                   <option value="">— no team —</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
                 <button
                   onClick={() => { addSeason(newSeasonName, newSeasonTeam || undefined); setNewSeasonName(currentSeasonName()); setNewSeasonTeam(''); }}
-                  className="btn-primary px-3 py-1 rounded text-xs font-semibold border transition whitespace-nowrap"
+                  className="btn-primary px-3 py-1 rounded text-xs font-bold transition whitespace-nowrap"
                 >Add</button>
               </div>
             </div>
@@ -340,29 +359,29 @@ function SeasonTeamModal({ onClose }: { onClose: () => void }) {
 
           {/* Teams */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-mut">🛡 Teams</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-mut">🛡 Teams</h3>
             <div className="space-y-2">
               {teams.map(t => {
                 const usedBy = seasons.filter(s => s.teamId === t.id).length;
                 return (
-                  <div key={t.id} className="border border-line rounded-lg p-2 flex items-center gap-2">
+                  <div key={t.id} className="border border-line/15 rounded-xl p-2 flex items-center gap-2">
                     {t.logo
-                      ? <img src={t.logo} alt={t.name} className="w-8 h-8 rounded-lg bg-slate-100 p-0.5 object-contain shrink-0" />
-                      : <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-sm shrink-0">🛡</div>}
+                      ? <img src={t.logo} alt={t.name} className="w-8 h-8 rounded-lg bg-white/90 p-0.5 object-contain shrink-0" />
+                      : <div className="w-8 h-8 rounded-lg bg-panel2 flex items-center justify-center text-sm shrink-0">🛡</div>}
                     <input
                       value={t.name}
                       onChange={e => renameTeam(t.id, e.target.value)}
-                      className="flex-1 min-w-0 border border-line rounded px-2 py-1 text-sm font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc"
+                      className="flex-1 min-w-0 bg-panel2/70 border border-line/20 rounded px-2 py-1 text-sm font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-acc/40 focus:border-acc"
                     />
                     <button
                       onClick={() => { pendingLogoRef.current = (d) => setTeamLogoById(t.id, d); logoInputRef.current?.click(); }}
-                      className="px-1.5 py-1 rounded text-xs border border-line hover:bg-slate-50 transition"
+                      className={BTN_ICON}
                       title="Upload logo"
                     >🏷</button>
                     {t.logo && (
                       <button
                         onClick={() => setTeamLogoById(t.id, null)}
-                        className="px-1.5 py-1 rounded text-xs text-red-500 border border-red-200 hover:bg-red-50 transition"
+                        className={BTN_DANGER}
                         title="Remove logo"
                       >✕</button>
                     )}
@@ -371,27 +390,27 @@ function SeasonTeamModal({ onClose }: { onClose: () => void }) {
                         if (usedBy > 0) { alert(`❌ Team is used by ${usedBy} season(s). Detach it first.`); return; }
                         if (confirm(`Delete team "${t.name}"?`)) deleteTeam(t.id);
                       }}
-                      className="px-1.5 py-1 rounded text-xs text-red-500 border border-red-200 hover:bg-red-50 transition"
+                      className={BTN_DANGER}
                       title={usedBy > 0 ? 'Used by a season — cannot delete' : 'Delete team'}
                     >🗑</button>
                   </div>
                 );
               })}
-              {!teams.length && <div className="text-xs text-mut border border-dashed border-line rounded-lg p-3 text-center">No teams yet</div>}
+              {!teams.length && <div className="text-xs text-mut border border-dashed border-line/25 rounded-xl p-3 text-center">No teams yet</div>}
             </div>
-            <div className="border border-dashed border-line rounded-lg p-2 space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-mut">+ New team</div>
+            <div className="border border-dashed border-line/25 rounded-xl p-2 space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-mut">+ New team</div>
               <div className="flex gap-2">
                 <input
                   value={newTeamName}
                   onChange={e => setNewTeamName(e.target.value)}
                   placeholder="e.g. Dynamo Minsk"
                   onKeyDown={e => { if (e.key === 'Enter') { addTeam(newTeamName); setNewTeamName(''); } }}
-                  className="flex-1 min-w-0 border border-line rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acc/30 focus:border-acc"
+                  className="flex-1 min-w-0 bg-panel2/70 border border-line/20 rounded px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-acc/40 focus:border-acc"
                 />
                 <button
                   onClick={() => { addTeam(newTeamName); setNewTeamName(''); }}
-                  className="btn-primary px-3 py-1 rounded text-xs font-semibold border transition whitespace-nowrap"
+                  className="btn-primary px-3 py-1 rounded text-xs font-bold transition whitespace-nowrap"
                 >Add</button>
               </div>
             </div>

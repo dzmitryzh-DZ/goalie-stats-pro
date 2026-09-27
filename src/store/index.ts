@@ -46,7 +46,6 @@ interface Store extends AppState {
 
   toggleMirror: () => void;
   toggleLocked: () => void;
-  setTeamLogo: (logo: string | null) => void;
   setAutoDiskSync: (on: boolean) => void;
 
   // Seasons & teams
@@ -229,7 +228,6 @@ export const useStore = create<Store>()(
 
       toggleMirror: () => set(state => ({ mirror: !state.mirror })),
       toggleLocked: () => set(state => ({ locked: !state.locked })),
-      setTeamLogo: (logo) => set(state => ({ media: { ...state.media, teamLogo: logo } })),
       setAutoDiskSync: (on) => set({ autoDiskSync: on }),
 
       // ---- Seasons & teams ----

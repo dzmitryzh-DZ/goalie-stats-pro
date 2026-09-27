@@ -33,12 +33,6 @@ export function pct(a: number, b: number) {
   return b > 0 ? (100 * a / b).toFixed(1) + '%' : '—';
 }
 
-export function svClass(saves: number, shots: number) {
-  if (!shots) return '';
-  const p = 100 * saves / shots;
-  return p >= 92 ? 'text-emerald-600 font-bold' : p >= 88 ? 'text-amber-600 font-bold' : 'text-red-600 font-bold';
-}
-
 export function gaa(goals: number, toi: number, games: number) {
   if (toi > 0) return (goals * 60 / toi).toFixed(2);
   return games > 0 ? (goals / games).toFixed(2) : '0.00';

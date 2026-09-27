@@ -3,8 +3,9 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import LockScreen from './components/LockScreen';
-import { isUnlocked } from './utils/auth';
-import * as gist from './utils/gist';
+import { isUnlocked, getSessionPassword } from './utils/auth';
+import * as yndx from './utils/yndx';
+import { decryptJSON } from './utils/crypto';
 import { useStore } from './store';
 import './index.css';
 
@@ -12,21 +13,24 @@ function Root() {
   const [unlocked, setUnlocked] = useState(isUnlocked());
   const [note, setNote] = useState('');
 
-  // Автозагрузка архива из облака: только если на устройстве нет локальных данных.
-  // Чтение гиста не требует токена — работает на любом новом устройстве.
+  // Автозагрузка из Яндекс.Диска: только если на устройстве нет локальных
+  // данных и в этом браузере сохранён токен. Файл зашифрован паролем сайта.
   useEffect(() => {
     if (!unlocked) return;
     (async () => {
       try {
+        if (!yndx.getToken()) return;
         const raw = localStorage.getItem('goalieZoneStatsV2');
         const parsed = raw ? JSON.parse(raw) : null;
         const games = parsed?.state?.games ?? parsed?.games ?? [];
         if (games.length > 0) return; // локальные данные есть — не трогаем
-        const data = await gist.readSync();
-        if (!data || !data.games?.length) return;
+        const text = await yndx.downloadFile(`${yndx.FOLDER}/${yndx.SYNC_FILE}`);
+        if (!text) return;
+        const data = await decryptJSON(text, getSessionPassword() ?? '');
+        if (!data || !Array.isArray(data.games) || !data.games.length) return;
         useStore.getState().importData(data);
-        setNote(`☁️ Загружено из облака: ${data.games.length} игр`);
-      } catch { /* нет сети — молча пропускаем */ }
+        setNote(`☁️ Загружено с Яндекс.Диска: ${data.games.length} игр`);
+      } catch { /* нет сети или неверный пароль — молча пропускаем */ }
     })();
   }, [unlocked]);
 
@@ -35,7 +39,7 @@ function Root() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         {unlocked ? <App /> : <LockScreen onUnlock={() => setUnlocked(true)} />}
         {note && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded-lg bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 shadow-lg">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded-lg bg-panel2 border border-line/20 text-ink text-xs font-semibold px-4 py-2.5 shadow-lg">
             {note}
           </div>
         )}
